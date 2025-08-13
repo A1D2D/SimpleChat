@@ -10,7 +10,23 @@ enum ClientCommand {
    CC_Connect,
    CC_Disconnect,
    CC_Exit,
-   CC_Message
+   CC_Message,
+   CC_Test_F
+};
+
+class SimpleChatClient : public SimpleClient {
+protected:
+   void onConnect() override {
+      SimpleClient::printClient("Connected!", getIp(), getPort(), true);
+   }
+   
+   void onReceive(const std::vector<ubyte_8>& data) override {
+      std::cout << "[Server]: " << StringUtil::bytesToString(data) << std::endl;
+   }
+
+   void onDisconnect() override {
+      SimpleClient::printClient("Disconnected.");
+   }
 };
 
 int main(int argc, const char** argv) {
@@ -32,9 +48,10 @@ int main(int argc, const char** argv) {
    std::cout << "SimpleChat\n";
    resetAnsiStyle();
 
-   SimpleClient client;
-
    NestedLoop nl;
+
+   SimpleChatClient client;
+
    for (;;) {
       std::getline(std::cin, msg);
       args = StringUtil::split(msg, " ");
@@ -44,8 +61,10 @@ int main(int argc, const char** argv) {
 
       auto it = commands.find(cmdStr);
       if (it == commands.end()) {
-         // std::cout << "Unknown command\n";
-         // continue;
+         if(msg.size() >= 0 && msg[0] == '/') {
+            std::cout << "Unknown command\n";
+            continue;
+         }
          cmd = CC_Message;
       } else {
          cmd = it->second;
@@ -64,42 +83,22 @@ int main(int argc, const char** argv) {
 
             SimpleClient::printClient("Connecting to Server..", *ip, *port, true);
             client.connect(*ip, *port);
-            client.startThread();
             break;
          }
          case CC_Disconnect: {
-            SimpleClient::printClient("client disconnected");
+            client.disconnect();
             break;
          }
          default: {
-            SimpleClient::printClient("msg: " + msg);
+            SimpleClient::printClient(""+msg);
             client.send(msg);
             break;
          }
       }
-      NL_CHECK(nl, 0);
+      NL_CHECK(nl,0);
    }
+   std::cout << "skipped" << std::endl;
+   client.joinThread();
+   
    return 0;
 }
-
-/*
-   ushort_16 port = 12345;
-   asio::io_context io;
-
-   SimpleClient client(io, "127.0.0.1", port);
-   std::cout << "SimpleChat ";
-   Colorb::SKY_BLUE.printAnsiStyle();
-   std::cout << "[Client: " << port << "]\n";
-   resetAnsiStyle();
-
-   std::thread ioThread([&]() { io.run(); });
-
-   std::string line;
-   while (std::getline(std::cin, line)) {
-      if (line == "/exit") break;
-      client.send(line);
-   }
-
-   io.stop();
-   ioThread.join();
-*/

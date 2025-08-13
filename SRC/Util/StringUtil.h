@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
-#include <codecvt>
-#include <locale>
 #include <algorithm>
 
 class StringUtil {
@@ -105,14 +103,38 @@ public:
    }
 
    static std::string utf8Truncate(const std::string& input, size_t max_chars) {
-      std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
-      std::u32string u32 = converter.from_bytes(input);
+      std::string output;
+      output.reserve(input.size());
 
-      if (u32.length() <= max_chars)
-         return input;
+      size_t char_count = 0;
+      const unsigned char* ptr = reinterpret_cast<const unsigned char*>(input.data());
+      const unsigned char* end = ptr + input.size();
 
-      u32 = u32.substr(0, max_chars);
-      return converter.to_bytes(u32);
+      while (ptr < end && char_count < max_chars) {
+         unsigned char c = *ptr;
+         size_t char_len = 0;
+
+         if (c < 0x80) {               // 1-byte sequence
+            char_len = 1;
+         } else if ((c >> 5) == 0x6) { // 2-byte sequence
+            char_len = 2;
+         } else if ((c >> 4) == 0xE) { // 3-byte sequence
+            char_len = 3;
+         } else if ((c >> 3) == 0x1E) { // 4-byte sequence
+            char_len = 4;
+         } else {
+            ++ptr;
+            continue;
+         }
+
+         if (ptr + char_len > end) break;
+
+         output.append(reinterpret_cast<const char*>(ptr), char_len);
+         ptr += char_len;
+         ++char_count;
+      }
+
+      return output;
    }
 
    static std::vector<ubyte_8> stringToBytes(const std::string& str) {
@@ -121,6 +143,15 @@ public:
 
    static std::string bytesToString(const std::vector<ubyte_8>& bytes) {
       return std::string(bytes.begin(), bytes.end());
+   }
+
+   static bool containsAny(const std::string& text, const std::vector<std::string>& words) {
+      for (const auto& word : words) {
+         if (text.find(word) != std::string::npos) {
+            return true;
+         }
+      }
+      return false;
    }
 
    // ---------- Base Template ----------
