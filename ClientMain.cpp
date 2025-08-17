@@ -4,7 +4,8 @@
 
 #include "SRC/Util/StringUtil.h"
 
-#include "SRC/Client/Client.h"
+// #include "SRC/Client/Client.h"
+#include "SRC/ServerClient/StreamedNet.h"
 
 enum ClientCommand {
    CC_Connect,
@@ -14,10 +15,10 @@ enum ClientCommand {
    CC_Test_F
 };
 
-class SimpleChatClient : public SimpleClient {
+class SimpleChatClient : public SN::StreamedNetClient {
 protected:
    void onConnect() override {
-      SimpleClient::printClient("Connected!", getIp(), getPort(), true);
+      StreamedNetClient::printClient("Connected!", getIp(), getPort(), true);
    }
    
    void onReceive(const std::vector<ubyte_8>& data) override {
@@ -25,7 +26,7 @@ protected:
    }
 
    void onDisconnect() override {
-      SimpleClient::printClient("Disconnected.");
+      StreamedNetClient::printClient("Disconnected.");
    }
 };
 
@@ -81,7 +82,7 @@ int main(int argc, const char** argv) {
                continue;
             }
 
-            SimpleClient::printClient("Connecting to Server..", *ip, *port, true);
+            SN::StreamedNetClient::printClient("Connecting to Server..", *ip, *port, true);
             client.connect(*ip, *port);
             break;
          }
@@ -90,7 +91,7 @@ int main(int argc, const char** argv) {
             break;
          }
          default: {
-            SimpleClient::printClient(""+msg);
+            SN::StreamedNetClient::printClient(""+msg);
             client.send(msg);
             break;
          }
