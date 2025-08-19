@@ -8,16 +8,17 @@
 using namespace SN;
 using namespace SNImpl;
 
+/*CLIENT*/
 SNImpl::Client::Client(asio::io_context& context, SN::StreamedNetClient& parent) : context_(context), parentRef(&parent), resolver(context), socket(context), readBuffer(20 * 1024), writeBuffer(20 * 1024) {}
 
-void SNImpl::Client::connect(const std::string& host, ushort_16 port) {
+void SNImpl::Client::autoConnect(const std::string &host, ushort_16 port) {
    if(HasFlag(state, State::Online)) {
       if(parentRef) parentRef->onError(AlreadyConnected, ec);
       return;
    }
    AddFlag(state, State::Online);
    AddFlag(state, State::Connecting);
-   if(parentRef) parentRef->joinThreadIfA();
+   if(parentRef) parentRef->joinThread();
 
    host_ = host;
    port_ = port;
@@ -57,7 +58,7 @@ void SNImpl::Client::connect(const std::string& host, ushort_16 port) {
 
    resolver.async_resolve(host_, std::to_string(port_), resolveLambda);
 
-   if(parentRef) parentRef->startThreadIfA();
+   if(parentRef) parentRef->startThread();
 }
 
 void SNImpl::Client::send(const std::vector<ubyte_8>& msg) {
@@ -92,7 +93,7 @@ void SNImpl::Client::disconnect() {
    asio::post(context_, [this, self]() {
       clientAbort();
    });
-   if(parentRef) parentRef->joinThreadIfA();
+   if(parentRef) parentRef->joinThread();
 }
 
 void SNImpl::Client::readData() {
@@ -132,7 +133,7 @@ void SNImpl::Client::clientAbort() {
       if(ec && parentRef) parentRef->onError(AbortCloseFailed, ec);
 
       if(parentRef) {
-         parentRef->stopContextIfA();
+         parentRef->stopContext();
          parentRef->onDisconnect();
          parentRef->onEvent(Disconnected);
       }
@@ -151,33 +152,8 @@ SN::StreamedNetClient::~StreamedNetClient() {
    clientPtr->parentRef = nullptr;
 }
 
-void SN::StreamedNetClient::startThreadIfA() {
-   if(!contextPtr_ || !context_) return;
-
-   thr = std::thread([this](){ 
-      context_->reset();
-      context_->run();
-   });
-}
-
-void SN::StreamedNetClient::joinThreadIfA() {
-   if(!contextPtr_ || !context_) return;
-
-   if (thr.joinable()) {
-      context_->stop();
-      thr.join();
-   }
-}
-
-void SN::StreamedNetClient::stopContextIfA() {
-   if(!contextPtr_ || !context_) return;
-
-   context_->stop();
-   context_->reset();
-}
-
-void SN::StreamedNetClient::connect(const std::string& ip, ushort_16 port) {
-   clientPtr->connect(ip, port);
+void SN::StreamedNetClient::autoConnect(const std::string& ip, ushort_16 port) {
+   clientPtr->autoConnect(ip, port);
 }
 
 void SN::StreamedNetClient::send(const std::vector<ubyte_8>& msg) {
@@ -193,7 +169,27 @@ void SN::StreamedNetClient::disconnect() {
 }
 
 void SN::StreamedNetClient::joinThread() {
-   joinThreadIfA();
+   if(!contextPtr_ || !context_) return;
+
+   if (thr.joinable()) {
+      context_->stop();
+      thr.join();
+   }
+}
+
+void SN::StreamedNetClient::stopContext() {
+   if(!contextPtr_ || !context_) return;
+
+   context_->stop();
+   context_->reset();
+}
+
+void SN::StreamedNetClient::startThread() {
+   if(!contextPtr_ || !context_) return;
+   thr = std::thread([this](){ 
+      context_->reset();
+      context_->run();
+   });
 }
 
 asio::io_context& SN::StreamedNetClient::getContext() {
@@ -208,7 +204,7 @@ const std::string SN::StreamedNetClient::getIp() {
    return clientPtr->host_;
 }
 
-const tcp::resolver::results_type& SN::StreamedNetClient::getREndpoints() {
+tcp::resolver::results_type& SN::StreamedNetClient::getREndpoints() {
    return clientPtr->resolvedEndpoints;
 }
 
@@ -219,11 +215,12 @@ const tcp::endpoint& SN::StreamedNetClient::getCEndpoints() {
 void SN::StreamedNetClient::onEvent(ClientEvent evt) {
    switch (evt) {
       case Resolved:
-         printClient("Enpoints resolved" + getREndpoints()->host_name() + ", " + getREndpoints()->service_name() + ", " + getREndpoints()->endpoint().address().to_string());
+         printClient("Enpoints resolved: " + getREndpoints()->host_name() + ", " + getREndpoints()->service_name() + ", " + getREndpoints()->endpoint().address().to_string(), 
+         getIp(), getPort(), true);
          break;
 
       case Connected:
-         printClient("Connected to: " + getCEndpoints().address().to_string());
+         printClient("Connected to: " + getCEndpoints().address().to_string(), getIp(), getPort(), true);
          break;
       case Disconnected:
          printClient("Disconnected");
@@ -277,3 +274,6 @@ void SN::StreamedNetClient::printClient(std::string&& clientStr, const std::stri
    resetAnsiStyle();
    std::cout << clientStr << "\n";
 }
+
+
+/*CONNECTION*/

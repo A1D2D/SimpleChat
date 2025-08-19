@@ -17,16 +17,8 @@ enum ClientCommand {
 
 class SimpleChatClient : public SN::StreamedNetClient {
 protected:
-   void onConnect() override {
-      StreamedNetClient::printClient("Connected!", getIp(), getPort(), true);
-   }
-   
    void onReceive(const std::vector<ubyte_8>& data) override {
       std::cout << "[Server]: " << StringUtil::bytesToString(data) << std::endl;
-   }
-
-   void onDisconnect() override {
-      StreamedNetClient::printClient("Disconnected.");
    }
 };
 
@@ -83,7 +75,7 @@ int main(int argc, const char** argv) {
             }
 
             SN::StreamedNetClient::printClient("Connecting to Server..", *ip, *port, true);
-            client.connect(*ip, *port);
+            client.autoConnect(*ip, *port);
             break;
          }
          case CC_Disconnect: {

@@ -11,14 +11,16 @@ namespace SNImpl {
    enum State {
       Offline = 0,
       Online = FlagDef(1),
-      Connecting = FlagDef(2)
+      Connecting = FlagDef(2),
+      EndpointResolved = FlagDef(3)
    };
 
    class Client : public std::enable_shared_from_this<Client> {
    public:
       Client(asio::io_context& context, SN::StreamedNetClient& parent);
 
-      void connect(const std::string& host, ushort_16 port);
+      void autoConnect(const std::string& host, ushort_16 port);
+      
       void send(const std::vector<ubyte_8>& msg);
       void disconnect();
 
@@ -43,11 +45,9 @@ namespace SNImpl {
    };
 
    class Server : std::enable_shared_from_this<Server> {
-
-   };
-
-   class Connection : std::enable_shared_from_this<Connection> {
-
+   public:
+      // Server(asio::io_context& context, SN::StreamedNetServer& parent);
+ 
    };
 }
 

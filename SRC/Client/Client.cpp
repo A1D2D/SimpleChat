@@ -152,8 +152,7 @@ void SimpleClient::printClient(std::string&& clientStr, const std::string& ip, u
    Colorb::SKY_BLUE.printAnsiStyle();
    if (wPort) {
       std::cout << "[Client: " << ip << ":" << port << "]: ";
-   } else
-      std::cout << "[Client]: ";
+   } else std::cout << "[Client]: ";
    resetAnsiStyle();
    std::cout << clientStr << "\n";
 }
