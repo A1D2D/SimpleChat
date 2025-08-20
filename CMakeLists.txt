@@ -6,9 +6,6 @@ include(FetchContent)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# set(CMAKE_EXE_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
-# set(CMAKE_SHARED_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
-
 # === FETCH_CONTENT ===
 set(LIB_FOLDER_NAME Libraries)
 set(INCLUDE_FOLDER_NAME Include)
@@ -20,6 +17,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_SOURCE_DIR}/Run)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/Run)
 
 set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTENT_FOLDER_NAME})
+set(BUILD_STATIC_EXECUTEABLE OFF)
 
 #fetchExternals
 # === VORTEX_MP ===
@@ -47,6 +45,18 @@ set(EXTERNAL_INCLUDE_PATHS
 #vcpkg:
 # find_package(lib CONFIG REQUIRED)
 
+
+# static build
+if(BUILD_STATIC_EXECUTEABLE MATCHES ON) 
+   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      set(CMAKE_EXE_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
+      set(CMAKE_SHARED_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
+   elseif(MSVC)
+      # MultiThreaded (Release) / MultiThreadedDebug (Debug)
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+   endif()
+endif()
+
 include_directories(
    ${EXTERNAL_INCLUDE_PATHS}
    ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${INCLUDE_FOLDER_NAME}
@@ -58,14 +68,11 @@ link_directories(
 
 add_executable(Client
    ClientMain.cpp
-   SRC/Client/Client.cpp
-   SRC/ServerClient/StreamedNet.cpp
+   SRC/StreamedNet/StreamedNet.cpp
 )
 add_executable(Server
    ServerMain.cpp
-   SRC/Server/Server.cpp
-   SRC/Server/Connection.cpp
-   SRC/ServerClient/StreamedNet.cpp
+   SRC/StreamedNet/StreamedNet.cpp
 )
 
 if(WIN32)

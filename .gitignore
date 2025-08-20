@@ -2,5 +2,6 @@
 .vscode/
 cmake-build-debug/
 build-debug/
+build-release/
 Libraries/External
 Run

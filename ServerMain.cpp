@@ -3,7 +3,7 @@
 #include <VORTEX_MP/NestedLoops>
 
 #include "SRC/Util/StringUtil.h"
-#include "SRC/Server/Server.h"
+#include "SRC/StreamedNet/StreamedNet.h"
 
 enum ServerCommand {
    SC_StartServer,
@@ -12,9 +12,9 @@ enum ServerCommand {
    SC_Message
 };
 
-class SimpleChatConnection : public SimpleConnection {
+class SimpleChatConnection : public SN::StreamedNetConnection {
 public:
-   using SimpleConnection::SimpleConnection;
+   using SN::StreamedNetConnection::StreamedNetConnection;
 protected:
    void onReceive(const std::vector<ubyte_8>& data) override {
       std::cout << "[Client]: " << StringUtil::bytesToString(data) << "\n";
@@ -27,27 +27,29 @@ protected:
       }
 
       asio::post(getContext(), [&, data]() {
-         for (auto& connection : getServer().connections) {
+         for (auto& connection : getServer().getConnections()) {
             if (connection.get() == this) continue;
             connection->send(data);
          }
       });
    }
+
+   void onEvent(Event evt) override {}
 };
 
-class SimpleChatServer : public SimpleServer {
+class SimpleChatServer : public SN::StreamedNetServer {
 protected:
-   void onStart(SimpleServer& server) {
-      SimpleServer::printServer("started", getPort(), true);
+   void onStart() override {
+      printServer("started", getPort(), true);
    }
 
-   std::shared_ptr<SimpleConnection> onAccept(tcp::socket &socket) override {
-      SimpleServer::printServer("client Accepted", getPort(), true);
+   std::shared_ptr<SN::StreamedNetConnection> onAccept(tcp::socket &socket) override {
+      printServer("client Accepted", getPort(), true);
       return std::make_shared<SimpleChatConnection>(this->getContext(),*this, socket);
    }
 
-   void onDisconnect(std::shared_ptr<SimpleConnection> connection) override {
-      SimpleServer::printServer("client disconnected", getPort(), true);
+   void onDisconnect(std::shared_ptr<SN::StreamedNetConnection> connection) override {
+      printServer("client disconnected", getPort(), true);
    }
 };
 
@@ -101,18 +103,18 @@ int main(int argc, const char** argv) {
             }
 
             server.start(*port);
-            SimpleServer::printServer("Server Created..", server.getPort(), true);
+            SN::StreamedNetServer::printServer("Server Created..", server.getPort(), true);
             break;
          }
          case SC_StopServer: {
             server.close();
-            SimpleServer::printServer("server closed");
+            SN::StreamedNetServer::printServer("server closed");
             break;
          }
          default: {
-            SimpleServer::printServer(""+msg);
+            SN::StreamedNetServer::printServer(""+msg);
             asio::post(server.getContext(), [&, msg]() {
-               for(auto& connection : server.connections) {
+               for(auto& connection : server.getConnections()) {
                   connection->send(msg);
                }
             });
