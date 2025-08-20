@@ -1,9 +1,7 @@
 #include "StreamedNet.h"
 #include "StreamedNetImpl.h"
-#include "asio/io_context.hpp"
 #include <memory>
 #include <iostream>
-#include "../Util/StringUtil.h"
 
 using namespace SN;
 using namespace SNImpl;
@@ -163,7 +161,7 @@ void SNC::send(const std::vector<ubyte_8>& msg) {
 }
 
 void SNC::send(const std::string& msg) {
-   clientPtr->send(StringUtil::stringToBytes(msg));
+   clientPtr->send(std::vector<ubyte_8>(msg.begin(), msg.end()));
 }
 
 void SNC::disconnect() {
@@ -273,12 +271,12 @@ SNImpl::Server& SN::StreamedNetServer::getImpl() {
 }
 
 void SNC::printClient(std::string&& clientStr, const std::string& ip, ushort_16 port, bool wPort) {
-   Colorb::SKY_BLUE.printAnsiStyle();
+   std::cout << "\033[34m"; 
    if (wPort) {
       std::cout << "[Client: " << ip << ":" << port << "]: ";
    } else
       std::cout << "[Client]: ";
-   resetAnsiStyle();
+   std::cout << "\033[0m";
    std::cout << clientStr << "\n";
 }
 
@@ -330,7 +328,7 @@ void StreamedNetConnection::send(const std::vector<ubyte_8>& msg) {
 }
 
 void StreamedNetConnection::send(const std::string& msg) {
-   send(StringUtil::stringToBytes(msg));
+   send(std::vector<ubyte_8>(msg.begin(), msg.end()));
 }
 
 void StreamedNetConnection::readData() {
@@ -596,11 +594,10 @@ void SNS::onError(Error err, const asio::error_code& ec) {
 }
 
 void SNS::printServer(std::string&& serverStr, ushort_16 port, bool wPort) {
-   Colorb::BRONZE.printAnsiStyle();
+   std::cout << "\033[38;2;205;127;50m";
    if (wPort) {
       std::cout << "[Server: " << port << "]: ";
-   } else
-      std::cout << "[Server]: ";
-   resetAnsiStyle();
+   } else std::cout << "[Server]: ";
+   std::cout << "\033[0m";
    std::cout << serverStr << "\n";
 }

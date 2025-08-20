@@ -1,10 +1,23 @@
 #ifndef SIMPLeCHAT_STREAMED_NET_H
 #define SIMPLeCHAT_STREAMED_NET_H
 #include <memory>
-
-#include <VORTEX_MP/LinearAlg>
-#include "../Util/AsioInclude.h"
 #include <thread>
+
+#ifdef _WIN32
+   #undef WINAPI_FAMILY
+   #define WIN32_WINNT 0x0A00
+#endif
+
+#include <asio.hpp>
+#include <asio/ts/buffer.hpp>
+#include <asio/ts/internet.hpp>
+
+#define FlagDef(ID) (1LL << ((ID)-1))
+#define HasFlag(flags, flag) (((flags) & (flag)) != 0)
+#define AddFlag(flags, flag) ((flags) |= (flag))
+#define RemoveFlag(flags, flag) ((flags) &= ~(flag))
+
+using asio::ip::tcp;
 
 namespace SNImpl {
    class Client;
@@ -13,7 +26,8 @@ namespace SNImpl {
 
 namespace SN {
    class StreamedNetServer;
-
+   using ubyte_8 = unsigned char;
+   using ushort_16 = unsigned short;
 
    class StreamedNetClient {
    public:
@@ -129,8 +143,8 @@ namespace SN {
       tcp::socket socket;
       StreamedNetServer& server;
 
-      VArray<ubyte_8> readBuffer;
-      VArray<ubyte_8> writeBuffer;
+      std::vector<ubyte_8> readBuffer;
+      std::vector<ubyte_8> writeBuffer;
    };
 
    class StreamedNetServer {

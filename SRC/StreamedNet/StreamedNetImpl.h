@@ -1,13 +1,14 @@
 #ifndef SIMPLeCHAT_STREAMED_NET_IMPL_H
 #define SIMPLeCHAT_STREAMED_NET_IMPL_H
 #include <memory>
-#include <VORTEX_MP/LinearAlg>
-
-#include "../Util/AsioInclude.h"
+#include <vector>
 
 #include "StreamedNet.h"
 
 namespace SNImpl {
+   using ubyte_8 = unsigned char;
+   using ushort_16 = unsigned short;
+
    class Client : public std::enable_shared_from_this<Client> {
    public:
       Client(asio::io_context& context, SN::StreamedNetClient& parent);
@@ -33,8 +34,8 @@ namespace SNImpl {
       tcp::endpoint connectedEndpoints;
       tcp::resolver::results_type resolvedEndpoints;
 
-      VArray<ubyte_8> readBuffer;
-      VArray<ubyte_8> writeBuffer;
+      std::vector<ubyte_8> readBuffer;
+      std::vector<ubyte_8> writeBuffer;
    };
 
    class Server : std::enable_shared_from_this<Server> {
