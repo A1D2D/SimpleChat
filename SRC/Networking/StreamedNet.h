@@ -1,5 +1,5 @@
-#ifndef SIMPLeCHAT_STREAMED_NET_H
-#define SIMPLeCHAT_STREAMED_NET_H
+#ifndef NETWORK_STREAMED_NET_H
+#define NETWORK_STREAMED_NET_H
 #include <memory>
 #include <thread>
 
@@ -206,5 +206,4 @@ namespace SN {
    };
 }
 
-#endif //SIMPLeCHAT_STREAMED_NET_H
-
+#endif //NETWORK_STREAMED_NET_H

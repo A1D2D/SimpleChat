@@ -2,6 +2,7 @@
 #define SIMPLeCHAT_STREAMED_NET_IMPL_H
 #include <memory>
 #include <vector>
+#include <optional>
 
 #include "StreamedNet.h"
 
@@ -62,4 +63,3 @@ namespace SNImpl {
 }
 
 #endif //SIMPLeCHAT_STREAMED_NET_IMPL_H
-

@@ -3,7 +3,7 @@
 #include <VORTEX_MP/NestedLoops>
 
 #include "SRC/Util/StringUtil.h"
-#include "SRC/StreamedNet/StreamedNet.h"
+#include "SRC/Networking/StreamedNet.h"
 
 enum ServerCommand {
    SC_StartServer,

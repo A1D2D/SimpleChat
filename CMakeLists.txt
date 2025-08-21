@@ -68,11 +68,11 @@ link_directories(
 
 add_executable(Client
    ClientMain.cpp
-   SRC/StreamedNet/StreamedNet.cpp
+   SRC/Networking/StreamedNet.cpp
 )
 add_executable(Server
    ServerMain.cpp
-   SRC/StreamedNet/StreamedNet.cpp
+   SRC/Networking/StreamedNet.cpp
 )
 
 if(WIN32)

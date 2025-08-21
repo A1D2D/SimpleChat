@@ -4,8 +4,7 @@
 
 #include "SRC/Util/StringUtil.h"
 
-// #include "SRC/Client/Client.h"
-#include "SRC/StreamedNet/StreamedNet.h"
+#include "SRC/Networking/StreamedNet.h"
 
 enum ClientCommand {
    CC_Connect,
