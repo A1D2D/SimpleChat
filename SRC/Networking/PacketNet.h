@@ -7,6 +7,7 @@
 
 namespace PN {
    using namespace SN;
+   using ulong_64 = unsigned long;
 
    template<typename T>
    class PacketNetClient : public StreamedNetClient {
@@ -30,14 +31,14 @@ namespace PN {
       std::vector<ubyte_8> incoming;
 
       void processPackets() {
-         while (incoming.size() >= 4) {
-            uint32_t len;
-            std::memcpy(&len, incoming.data(), 4);
-            if (incoming.size() < 4 + len) break;
+         while (incoming.size() >= 8) {
+            ulong_64 len;
+            std::memcpy(&len, incoming.data(), 8);
+            if (incoming.size() < 8 + len) break;
 
-            std::vector<ubyte_8> raw(incoming.begin() + 4, incoming.begin() + 4 + len);
+            std::vector<ubyte_8> raw(incoming.begin() + 8, incoming.begin() + 8 + len);
             T pkt = deserialize(raw);
-            incoming.erase(incoming.begin(), incoming.begin() + 4 + len);
+            incoming.erase(incoming.begin(), incoming.begin() + 8 + len);
             onPacket(pkt);
          }
       }
@@ -45,10 +46,10 @@ namespace PN {
       static std::vector<ubyte_8> serialize(const T& pkt) {
          std::vector<ubyte_8> buf(sizeof(T));
          std::memcpy(buf.data(), &pkt, sizeof(T));
-         std::vector<ubyte_8> result(4 + buf.size());
-         uint32_t len = static_cast<uint32_t>(buf.size());
-         std::memcpy(result.data(), &len, 4);
-         std::memcpy(result.data() + 4, buf.data(), buf.size());
+         std::vector<ubyte_8> result(8 + buf.size());
+         ulong_64 len = static_cast<uint32_t>(buf.size());
+         std::memcpy(result.data(), &len, 8);
+         std::memcpy(result.data() + 8, buf.data(), buf.size());
          return result;
       }
 
