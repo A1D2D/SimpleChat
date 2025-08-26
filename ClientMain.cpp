@@ -4,7 +4,7 @@
 
 #include "SRC/Util/StringUtil.h"
 
-#include "SRC/Networking/StreamedNet.h"
+#include "SRC/Networking/PacketNet.h"
 
 enum ClientCommand {
    CC_Connect,
@@ -14,10 +14,14 @@ enum ClientCommand {
    CC_Test_F
 };
 
-class SimpleChatClient : public SN::StreamedNetClient {
+class SimpleChatClient : public PN::PacketNetClient<> {
 protected:
-   void onReceive(const std::vector<ubyte_8>& data) override {
-      std::cout << "[Server]: " << StringUtil::bytesToString(data) << std::endl;
+   void onPacket(const PN::DefaultPacket& data) override {
+      std::cout << "[Server]: " << StringUtil::bytesToString(data.data) << std::endl;
+   }
+
+   void onConnect() override {
+      sendHandshake();
    }
 };
 
@@ -83,7 +87,7 @@ int main(int argc, const char** argv) {
          }
          default: {
             SN::StreamedNetClient::printClient(""+msg);
-            client.send(msg);
+            client.sendPacket(StringUtil::stringToBytes(msg));
             break;
          }
       }

@@ -3,7 +3,7 @@
 #include <VORTEX_MP/NestedLoops>
 
 #include "SRC/Util/StringUtil.h"
-#include "SRC/Networking/StreamedNet.h"
+#include "SRC/Networking/PacketNet.h"
 
 enum ServerCommand {
    SC_StartServer,
@@ -12,14 +12,14 @@ enum ServerCommand {
    SC_Message
 };
 
-class SimpleChatConnection : public SN::StreamedNetConnection {
+class SimpleChatConnection : public PN::PacketNetConnection<> {
 public:
-   using SN::StreamedNetConnection::StreamedNetConnection;
+   using PN::PacketNetConnection<>::PacketNetConnection;
 protected:
-   void onReceive(const std::vector<ubyte_8>& data) override {
-      std::cout << "[Client]: " << StringUtil::bytesToString(data) << "\n";
+   void onPacket(const PN::DefaultPacket& data) override {
+      std::cout << "[Client]: " << StringUtil::bytesToString(data.data) << "\n";
 
-      std::string msg = StringUtil::bytesToString(data);
+      std::string msg = StringUtil::bytesToString(data.data);
 
       if(StringUtil::containsAny(msg, {"labda", "kacsa", "idk"})) {
          disconnect();
@@ -29,15 +29,19 @@ protected:
       asio::post(getContext(), [&, data]() {
          for (auto& connection : getServer().getConnections()) {
             if (connection.get() == this) continue;
-            connection->send(data);
+            connection->sendPacket(data);
          }
       });
+   }
+
+   void onStart() override {
+      sendHandshake();
    }
 
    void onEvent(Event evt) override {}
 };
 
-class SimpleChatServer : public SN::StreamedNetServer {
+class SimpleChatServer : public PN::PacketNetServer<> {
 protected:
    void onStart() override {
       printServer("started", getPort(), true);
@@ -48,7 +52,7 @@ protected:
       return std::make_shared<SimpleChatConnection>(this->getContext(),*this, socket);
    }
 
-   void onDisconnect(std::shared_ptr<SN::StreamedNetConnection> connection) override {
+   void onDisconnect(std::shared_ptr<PN::PacketNetConnection<>> connection) override {
       printServer("client disconnected", getPort(), true);
    }
 };
@@ -115,7 +119,7 @@ int main(int argc, const char** argv) {
             SN::StreamedNetServer::printServer(""+msg);
             asio::post(server.getContext(), [&, msg]() {
                for(auto& connection : server.getConnections()) {
-                  connection->send(msg);
+                  connection->sendPacket(StringUtil::stringToBytes(msg));
                }
             });
             break;
