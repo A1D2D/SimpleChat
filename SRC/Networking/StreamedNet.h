@@ -26,8 +26,8 @@ namespace SNImpl {
 
 namespace SN {
    class StreamedNetServer;
-   using ubyte_8 = unsigned char;
-   using ushort_16 = unsigned short;
+   using ubyte_8 = std::uint8_t;
+   using ushort_16 = std::uint16_t;
 
    class StreamedNetClient {
    public:

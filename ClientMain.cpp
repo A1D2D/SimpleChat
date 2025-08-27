@@ -24,7 +24,7 @@ protected:
       sendHandshake();
    }
 };
-
+/*
 int main(int argc, const char** argv) {
    std::string msg;
    std::vector<std::string> args;
@@ -96,5 +96,74 @@ int main(int argc, const char** argv) {
    std::cout << "skipped" << std::endl;
    client.joinThread();
    
+   return 0;
+}
+*/
+
+struct Alma : PN::Serializable {
+   std::string v;
+
+   SERIALIZABLE(v)
+};
+
+struct Kusolj : PN::Serializable {
+   int a;
+   float b;
+   unsigned long c;
+   std::string val;
+   std::vector<int> lol;
+   std::vector<Alma> d;
+
+   SERIALIZABLE(a, b, c, val, lol, d)
+};
+
+std::array<unsigned char,2> getHex(unsigned char byte) {
+   const unsigned char HexChars[6] = {'A','B','C','D','E','F'};
+   std::array<unsigned char, 2> array{};
+   unsigned char bits = byte & 0x0F;
+   for (int i = 0; i < 2; ++i) {
+      if(i == 0) {
+         bits = (byte & 0xF0) >> 4;
+      }
+      if(bits < 10) {
+         array[i] = '0' + bits;
+      } else array[i] = HexChars[bits-10];
+   }
+   return array;
+}
+
+std::string getHex(const std::vector<unsigned char>& buffer) {
+   std::string hexString(buffer.size()*3-1,' ');
+   for (int i = 0; i < buffer.size(); ++i) {
+      auto hexChars = getHex(buffer[i]);
+      hexString[i*3] = (char)hexChars[0];
+      hexString[i*3+1] = (char)hexChars[1];
+   }
+   return hexString;
+}
+
+int main(int argc, const char** argv) {
+   Kusolj k;
+   Kusolj z;
+   std::vector<ubyte_8> buf;
+
+   k.a = 420;
+   k.b = 3.14;
+   k.c = 50;
+   k.val = "venator";
+   k.lol = {1, 2, 3, 4, 5, 6};
+   Alma a;
+   a.v = "helna";
+   k.d = { a };
+
+   buf = k.serialize();
+   ulong_64 id = 0;
+   z.deserialize(buf, id);
+
+   std::cout << "str->" << StringUtil::bytesToString(k.serialize()) << "\n";
+   std::cout << "hex->" << getHex(k.serialize()) << "\n";
+
+   std::cout << z.a << " : " << z.b << " : " << z.c << " : " << z.val << " : " << z.lol[0] << " : " << z.lol[1] << " : " << z.lol[2] << " : " << z.lol[3] << " : " << z.lol[4] << " : " << z.lol[5] << k.d[0].v << "\n";
+
    return 0;
 }
