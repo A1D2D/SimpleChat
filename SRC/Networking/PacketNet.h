@@ -7,9 +7,6 @@
 
 #include "StreamedNet.h"
 
-#include <iostream>
-#include "../Util/StringUtil.h"
-
 namespace PN {
    using namespace SN;
    using ulong_64 = std::uint64_t;
@@ -32,6 +29,7 @@ namespace PN {
    struct DefaultPacket : PacketNetPacket {
       constexpr static const std::string_view headSpecifier = "PN_PACKET";
       constexpr static const std::string_view endSpecifier = "<~PN>";
+      constexpr static const ulong_64 maxPacketSize = 64*1024*1024;
       std::string_view readHeadSpecifier{};
       std::string_view readEndSpecifier{};
       ulong_64 len;
@@ -48,7 +46,7 @@ namespace PN {
 
       bool deserializeHead(std::vector<ubyte_8>& incoming) override {
          if(incoming.size() < headSpecifier.size() + 8) return false;
-
+         
          readHeadSpecifier = std::string_view(reinterpret_cast<char*>(incoming.data()), headSpecifier.size());
          std::memcpy(&len, incoming.data()+headSpecifier.size(), 8);
 
@@ -56,6 +54,9 @@ namespace PN {
       }
 
       bool checkHead() override {
+         if(maxPacketSize != 0) {
+            if(headSpecifier.size() + 8 + len + endSpecifier.size() > maxPacketSize) return false;
+         }
          return readHeadSpecifier == headSpecifier;
       }
 
