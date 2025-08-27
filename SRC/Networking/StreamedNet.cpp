@@ -537,11 +537,11 @@ void SNS::startThread() {
 
 void SNS::joinThread() {
    if (!contextPtr_ || !context_) return;
+   if (!thr.joinable()) return;
+   context_->stop();
 
-   if (thr.joinable()) {
-      context_->stop();
-      thr.join();
-   }
+   if (std::this_thread::get_id() == thr.get_id()) return;
+   thr.join();
 }
 
 void SNS::stopContext() {
