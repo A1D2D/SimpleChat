@@ -92,7 +92,7 @@ void Client::disconnect() {
    auto self(shared_from_this());
    asio::post(context_, [this, self]() {
       clientAbort();
-   });
+      });
    if (parentRef) parentRef->joinThread();
 }
 
@@ -152,6 +152,26 @@ SNC::~StreamedNetClient() {
    clientPtr->parentRef = nullptr;
 }
 
+SNC::StreamedNetClient(StreamedNetClient&& other) noexcept : 
+thr(std::move(other.thr)), contextPtr_(std::move(other.contextPtr_)), context_(other.context_), clientPtr(std::move(other.clientPtr)) {
+   other.context_ = nullptr;
+}
+
+StreamedNetClient& SNC::operator=(StreamedNetClient&& other) noexcept {
+   if (this != &other) {
+      if (thr.joinable()) thr.join();  
+
+      thr = std::move(other.thr);
+      contextPtr_ = std::move(other.contextPtr_);
+      context_ = other.context_;
+      clientPtr = std::move(other.clientPtr);
+
+      other.context_ = nullptr;
+   }
+   return *this;
+}
+
+
 void SNC::autoConnect(const std::string& ip, ushort_16 port) {
    clientPtr->autoConnect(ip, port);
 }
@@ -174,7 +194,7 @@ void SNC::startThread() {
    thr = std::thread([this]() {
       context_->reset();
       context_->run();
-      });
+   });
 }
 
 void SNC::joinThread() {
@@ -271,7 +291,7 @@ SNImpl::Server& SN::StreamedNetServer::getImpl() {
 }
 
 void SNC::printClient(std::string&& clientStr, const std::string& ip, ushort_16 port, bool wPort) {
-   std::cout << "\033[34m"; 
+   std::cout << "\033[34m";
    if (wPort) {
       std::cout << "[Client: " << ip << ":" << port << "]: ";
    } else
@@ -320,7 +340,7 @@ void StreamedNetConnection::send(const std::vector<ubyte_8>& msg) {
             }
          }
          onEvent(Event::DataSent);
-      };
+         };
       if (socket.is_open()) {
          asio::async_write(socket, asio::buffer(writeBuffer.data(), msg.size()), writeLambda);
       } else onError(Error::ConnectionClosed, ec);
@@ -350,7 +370,7 @@ void StreamedNetConnection::readData() {
       onReceive({ readBuffer.data(), readBuffer.data() + length });
       onEvent(Event::DataReceived);
       readData();
-   };
+      };
 
    socket.async_read_some(asio::buffer(readBuffer.data(), readBuffer.size()), readLambda);
 }
@@ -429,7 +449,7 @@ void Server::start(ushort_16 port) {
 void Server::close() {
    asio::post(context_, [this]() {
       serverAbort();
-   });
+      });
    if (parentRef) parentRef->joinThread();
 }
 
@@ -452,7 +472,7 @@ void Server::acceptClients() {
          connections.emplace_back(std::move(connection));
       }
       acceptClients();
-   };
+      };
 
    acceptor->async_accept(*pendingSocket, aceptLambda);
 }
@@ -494,12 +514,12 @@ void Server::removeConnection(std::shared_ptr<StreamedNetConnection> connection)
    auto it = std::find(connections.begin(), connections.end(), connection);
    if (it != connections.end()) {
       std::error_code ec;
-      if(parentRef) parentRef->onDisconnect(connection);
+      if (parentRef) parentRef->onDisconnect(connection);
 
       ec = connection->socket.shutdown(tcp::socket::shutdown_both, ec);
-      if(ec && parentRef) parentRef->onError(SNS::Error::AbortShutdownFailed, ec);
+      if (ec && parentRef) parentRef->onError(SNS::Error::AbortShutdownFailed, ec);
       ec = connection->socket.close(ec);
-      if(ec && parentRef) parentRef->onError(SNS::Error::AbortCloseFailed, ec);
+      if (ec && parentRef) parentRef->onError(SNS::Error::AbortCloseFailed, ec);
 
       connections.erase(it);
    }
@@ -518,6 +538,25 @@ SNS::~StreamedNetServer() {
    serverPtr->parentRef = nullptr;
 }
 
+SN::StreamedNetServer::StreamedNetServer(StreamedNetServer&& other) noexcept : 
+thr(std::move(other.thr)), contextPtr_(std::move(other.contextPtr_)), context_(other.context_), serverPtr(std::move(other.serverPtr)) {
+   other.context_ = nullptr;
+}
+
+StreamedNetServer& SN::StreamedNetServer::operator=(StreamedNetServer&& other) noexcept {
+   if (this != &other) {
+      if (thr.joinable()) thr.join();  
+
+      thr = std::move(other.thr);
+      contextPtr_ = std::move(other.contextPtr_);
+      context_ = other.context_;
+      serverPtr = std::move(other.serverPtr);
+
+      other.context_ = nullptr;
+   }
+   return *this;
+}
+
 void SNS::start(ushort_16 port) {
    serverPtr->start(port);
 }
@@ -532,7 +571,7 @@ void SNS::startThread() {
    thr = std::thread([this]() {
       context_->reset();
       context_->run();
-   });
+      });
 }
 
 void SNS::joinThread() {

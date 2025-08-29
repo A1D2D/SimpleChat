@@ -59,6 +59,12 @@ namespace SN {
       StreamedNetClient();
       ~StreamedNetClient();
 
+      StreamedNetClient(const StreamedNetClient&) = delete;
+      StreamedNetClient& operator=(const StreamedNetClient&) = delete;
+
+      StreamedNetClient(StreamedNetClient&& other) noexcept;
+      StreamedNetClient& operator=(StreamedNetClient&& other) noexcept;
+
       void autoConnect(const std::string& ip, ushort_16 port);
       void send(const std::vector<ubyte_8>& msg);
       void send(const std::string& msg);
@@ -170,6 +176,12 @@ namespace SN {
       StreamedNetServer();
       ~StreamedNetServer();
 
+      StreamedNetServer(const StreamedNetServer&) = delete;
+      StreamedNetServer& operator=(const StreamedNetServer&) = delete;
+
+      StreamedNetServer(StreamedNetServer&& other) noexcept;
+      StreamedNetServer& operator=(StreamedNetServer&& other) noexcept;
+
       void start(ushort_16 port);
       void close();
       void startThread();
@@ -192,11 +204,13 @@ namespace SN {
       virtual void onEvent(Event evt) {}
       virtual void onError(Error err, const asio::error_code& ec);
 
-      std::thread thr;
-
    private:
       SNImpl::Server& getImpl();
 
+   protected:
+      std::thread thr;
+
+   private:
       std::unique_ptr<asio::io_context> contextPtr_;
 
    protected:

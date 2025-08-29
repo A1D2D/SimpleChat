@@ -94,7 +94,6 @@ int main(int argc, const char** argv) {
       NL_CHECK(nl,0);
    }
    std::cout << "skipped" << std::endl;
-   client.joinThread();
-   
+   client.joinThread();   
    return 0;
 }
