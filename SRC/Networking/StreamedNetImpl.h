@@ -1,5 +1,5 @@
-#ifndef SIMPLeCHAT_STREAMED_NET_IMPL_H
-#define SIMPLeCHAT_STREAMED_NET_IMPL_H
+#ifndef NETWORK_STREAMED_NET_IMPL_H
+#define NETWORK_STREAMED_NET_IMPL_H
 #include <memory>
 #include <vector>
 #include <optional>
@@ -23,6 +23,7 @@ namespace SNImpl {
       void clientAbort();
 
       SN::StreamedNetClient* parentRef;
+      std::mutex parentMutex;
       asio::io_context& context_;
       asio::error_code ec;
       std::atomic<ubyte_8> state = SN::StreamedNetClient::Offline;
@@ -62,4 +63,4 @@ namespace SNImpl {
    };
 }
 
-#endif //SIMPLeCHAT_STREAMED_NET_IMPL_H
+#endif //~NETWORK_STREAMED_NET_IMPL_H

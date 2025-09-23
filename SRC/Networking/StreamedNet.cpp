@@ -38,7 +38,8 @@ void Client::autoConnect(const std::string& host, ushort_16 port) {
          parentRef->onConnect();
       }
       readData();
-      };
+      if (parentRef) parentRef->onStart();
+   };
 
    auto resolveLambda = [this, connectLambda, self](const std::error_code& ec, tcp::resolver::results_type endpoints_) {
       resolvedEndpoints = endpoints_;
@@ -81,9 +82,10 @@ void Client::send(const std::vector<ubyte_8>& msg) {
             }
          }
          if (parentRef) parentRef->onEvent(SNC::Event::DataSent);
-         };
+      };
       if (socket.is_open()) {
          asio::async_write(socket, asio::buffer(writeBuffer.data(), msg.size()), writeLambda);
+
       } else if (parentRef) parentRef->onError(SNC::Error::ConnectionClosed, ec);
    });
 }
@@ -92,7 +94,7 @@ void Client::disconnect() {
    auto self(shared_from_this());
    asio::post(context_, [this, self]() {
       clientAbort();
-      });
+   });
    if (parentRef) parentRef->joinThread();
 }
 
@@ -126,6 +128,7 @@ void Client::clientAbort() {
    if (HasFlag(state, SNC::Online) || HasFlag(state, SNC::Connecting) || socket.is_open()) {
       RemoveFlag(state, SNC::Online);
       RemoveFlag(state, SNC::Connecting);
+
       ec = socket.shutdown(tcp::socket::shutdown_both, ec);
       if (ec && parentRef) parentRef->onError(SNC::Error::AbortShutdownFailed, ec);
       ec = socket.close(ec);
@@ -149,7 +152,9 @@ clientPtr(std::make_shared<Client>(*context_, *this)) {
 }
 
 SNC::~StreamedNetClient() {
-   clientPtr->parentRef = nullptr;
+   asio::post(clientPtr->context_,std::bind([this](std::shared_ptr<SNImpl::Client> clientPtrCopy) {
+      clientPtrCopy->parentRef = nullptr;
+   }, clientPtr));
 }
 
 SNC::StreamedNetClient(StreamedNetClient&& other) noexcept : 
@@ -170,7 +175,6 @@ StreamedNetClient& SNC::operator=(StreamedNetClient&& other) noexcept {
    }
    return *this;
 }
-
 
 void SNC::autoConnect(const std::string& ip, ushort_16 port) {
    clientPtr->autoConnect(ip, port);
@@ -233,18 +237,26 @@ const tcp::endpoint& SNC::getCEndpoints() {
    return clientPtr->connectedEndpoints;
 }
 
+tcp::socket& SN::StreamedNetClient::getSocket() {
+   return clientPtr->socket;
+}
+
+ubyte_8 SN::StreamedNetClient::getState() {
+   return clientPtr->state;
+}
+
 void SNC::onEvent(Event evt) {
    switch (evt) {
    case SNC::Event::Resolved:
-      printClient("Enpoints resolved: " + getREndpoints()->host_name() + ", " + getREndpoints()->service_name() + ", " + getREndpoints()->endpoint().address().to_string(),
+      printClient("EVE Enpoints resolved: " + getREndpoints()->host_name() + ", " + getREndpoints()->service_name() + ", " + getREndpoints()->endpoint().address().to_string(),
          getIp(), getPort(), true);
       break;
 
    case SNC::Event::Connected:
-      printClient("Connected to: " + getCEndpoints().address().to_string(), getIp(), getPort(), true);
+      printClient("EVE Connected to: " + getCEndpoints().address().to_string(), getIp(), getPort(), true);
       break;
    case SNC::Event::Disconnected:
-      printClient("Disconnected");
+      printClient("EVE Disconnected");
       break;
 
    default:
@@ -253,33 +265,35 @@ void SNC::onEvent(Event evt) {
 }
 
 void SNC::onError(Error err, const asio::error_code& ec) {
+   std::string errorMsg = "[]";
+   errorMsg = "[" + ec.message() + "]";
    switch (err) {
    case SNC::Error::AlreadyConnected:
-      std::cout << "already oppen\n";
+      printClient("ERR Already oppen.");
       break;
    case SNC::Error::ConnectFailed:
-      printClient("Failed to connect: " + ec.message());
+      printClient("ERR Failed to connect: " + errorMsg);
       break;
    case SNC::Error::ResolveFailed:
-      printClient("Failed to resolve: " + ec.message());
+      printClient("ERR Failed to resolve: " + errorMsg);
       break;
    case SNC::Error::ConnectionClosed:
-      printClient("Server closed the connection.");
+      printClient("ERR Server closed the connection: " + errorMsg);
       break;
    case SNC::Error::Aborted:
-      //connectionAborted
+      printClient("ERR Abort: " + errorMsg);
       break;
    case SNC::Error::WriteFailed:
-      std::cerr << "write failed: " << ec.message() << std::endl;
+      printClient("ERR Write failed: " + errorMsg);
       break;
    case SNC::Error::ReadFailed:
-      std::cerr << "Read failed: " << ec.message() << std::endl;
+      printClient("ERR Read failed: " + errorMsg);
       break;
    case SNC::Error::AbortShutdownFailed:
-      std::cerr << "Abort shutdown failed: " << ec.message() << std::endl;
+      printClient("ERR Abort shutdown failed: " + errorMsg);
       break;
    case SNC::Error::AbortCloseFailed:
-      std::cerr << "Abort close failed: " << ec.message() << std::endl;
+      printClient("ERR Abort close failed: " + errorMsg);
       break;
    default:
       break;
@@ -370,7 +384,7 @@ void StreamedNetConnection::readData() {
       onReceive({ readBuffer.data(), readBuffer.data() + length });
       onEvent(Event::DataReceived);
       readData();
-      };
+   };
 
    socket.async_read_some(asio::buffer(readBuffer.data(), readBuffer.size()), readLambda);
 }
@@ -392,13 +406,21 @@ StreamedNetServer& StreamedNetConnection::getServer() {
    return server;
 }
 
+tcp::socket& StreamedNetConnection::getSocket() {
+   return socket;
+}
+
+ubyte_8 StreamedNetConnection::getState() {
+   return state;
+}
+
 void StreamedNetConnection::onEvent(Event evt) {
    switch (evt) {
    case Event::DataReceived:
-      std::cout << "data received\n";
+      SNS::printServer("EVE Data received.");
       break;
    case Event::Disconnected:
-      std::cout << "disconnectd\n";
+      SNS::printServer("EVE Disconnected.");
       break;
    default:
       break;
@@ -406,23 +428,26 @@ void StreamedNetConnection::onEvent(Event evt) {
 }
 
 void StreamedNetConnection::onError(Error err, const asio::error_code& ec) {
+   std::string errorMsg = "[]";
+   errorMsg = "[" + ec.message() + "]";
    switch (err) {
    case Error::ConnectionClosed:
-      std::cerr << "connection closed\n";
+      SNS::printServer("ERR Connection closed: " + errorMsg);
       break;
    case Error::Aborted:
-      std::cerr << "connection closed\n";
+      SNS::printServer("ERR Aborted: " + errorMsg);
       break;
    case Error::WriteFailed:
-      std::cerr << "write failed\n";
+      SNS::printServer("ERR Write failed: " + errorMsg);
       break;
    case Error::ReadFailed:
-      std::cerr << "read failed\n";
+      SNS::printServer("ERR Read failed: " + errorMsg);
       break;
    default:
       break;
    }
 }
+
 
 /*SERVER*/
 Server::Server(asio::io_context& context, StreamedNetServer& parent) : context_(context), parentRef(&parent) {}
@@ -449,7 +474,7 @@ void Server::start(ushort_16 port) {
 void Server::close() {
    asio::post(context_, [this]() {
       serverAbort();
-      });
+   });
    if (parentRef) parentRef->joinThread();
 }
 
@@ -472,7 +497,7 @@ void Server::acceptClients() {
          connections.emplace_back(std::move(connection));
       }
       acceptClients();
-      };
+   };
 
    acceptor->async_accept(*pendingSocket, aceptLambda);
 }
@@ -571,7 +596,7 @@ void SNS::startThread() {
    thr = std::thread([this]() {
       context_->reset();
       context_->run();
-      });
+   });
 }
 
 void SNS::joinThread() {

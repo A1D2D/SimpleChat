@@ -78,12 +78,15 @@ namespace SN {
       const std::string getIp();
       tcp::resolver::results_type& getREndpoints();
       const tcp::endpoint& getCEndpoints();
+      tcp::socket& getSocket();
+      ubyte_8 getState();
 
       static void printClient(std::string&& clientStr, const std::string& ip = "localhost", ushort_16 port = 0, bool wPort = false);
       friend class SNImpl::Client;
 
    protected:
       virtual void onConnect() {}
+      virtual void onStart() {}
       virtual void onResolve() {}
       virtual void onDisconnect() {}
       virtual void onReceive(const std::vector<ubyte_8>& data) {}
@@ -127,6 +130,8 @@ namespace SN {
 
       asio::io_context& getContext();
       StreamedNetServer& getServer();
+      tcp::socket& getSocket();
+      ubyte_8 getState();
 
       std::atomic<ubyte_8> state = State::Offline;
       friend class StreamedNetServer;

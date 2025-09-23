@@ -20,7 +20,7 @@ protected:
       std::cout << "[Server]: " << StringUtil::bytesToString(data.data) << std::endl;
    }
 
-   void onConnect() override {
+   void onStart() override {
       sendHandshake();
    }
 };

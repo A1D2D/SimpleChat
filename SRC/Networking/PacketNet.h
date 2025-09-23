@@ -134,8 +134,8 @@ namespace PN {
       else if constexpr (is_specialization<T, std::map>::value) {
          writeAny(buf, static_cast<ulong_64>(v.size()));
          for (auto& [k, val] : v) {
-               writeAny(buf, k);
-               writeAny(buf, val);
+            writeAny(buf, k);
+            writeAny(buf, val);
          }
       }
       else if constexpr (std::is_trivially_copyable_v<T>) {
