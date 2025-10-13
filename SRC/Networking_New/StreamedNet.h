@@ -8,12 +8,12 @@
    #define WIN32_WINNT 0x0A00
 #endif
 
-
 #include <asio.hpp>
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 
 #include "NetTSQueue.h"
+#include "NetOWLock.h"
 
 #define FlagDef(ID) (1LL << ((ID)-1))
 #define HasFlag(flags, flag) (((flags) & (flag)) != 0)
@@ -36,11 +36,18 @@ namespace SNImpl {
    using ubyte_8 = unsigned char;
    using ushort_16 = unsigned short;
 
+   enum ContextLock : char {
+      NO_LOCK,
+      LIFTIME_H_LOCK,
+      CONTEXT_LOCK,
+   };
+
    class NetStream {
    public:
       NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket);
       NetStream(std::shared_ptr<asio::io_context> context);
    
+      void send(const std::vector<ubyte_8> msg);
       void startRead();
       void startWrite();
       void stopRead();
@@ -59,18 +66,20 @@ namespace SNImpl {
 
       std::atomic<int> state;
 
+      SN::OWLock oWLock;
+
       std::shared_ptr<asio::io_context> context_;
       tcp::socket socket_;
-      std::mutex mutex;
+      std::atomic<char> contextLock = NO_LOCK;
 
       std::vector<ubyte_8> readBuffer;
-      std::vector<ubyte_8> writeBuffer;
 
-      SN::TSQueue<ubyte_8> writeQ;
+      SN::TSQueue<std::vector<ubyte_8>> writeQ;
       SN::TSQueue<ubyte_8> readQ;
    };
 
    class Client : public NetStream {
+   public:
       Client(std::shared_ptr<asio::io_context> context);
       void resolve(const std::string& host, ushort_16 port);
       void addEndpoint(const std::string& host, ushort_16 port);
@@ -82,6 +91,9 @@ namespace SNImpl {
       tcp::resolver resolver;
 
       std::vector<tcp::endpoint> endpoints;
+
+   public:
+      static void printClient(std::string&& clientStr, const std::string& ip = "localhost", ushort_16 port = 0, bool wPort = false);
    };
 
    class Connection : public NetStream {

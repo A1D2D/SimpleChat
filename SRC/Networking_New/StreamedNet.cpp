@@ -1,20 +1,21 @@
 #include "StreamedNet.h"
+#include <iostream>
 
 /*---------------------------NET_STREAM---------------------------*/
 SNImpl::NetStream::NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket) :
-   context_(context), socket_(std::move(socket)), readBuffer(20 * 1024), writeBuffer(20 * 1024) {
+   context_(context), socket_(std::move(socket)), readBuffer(20 * 1024) {
    doTick();
 }
 
 SNImpl::NetStream::NetStream(std::shared_ptr<asio::io_context> context) :
-   context_(context), socket_(*context_), readBuffer(20 * 1024), writeBuffer(20 * 1024) {
+   context_(context), socket_(*context_), readBuffer(20 * 1024) {
    doTick();
 }
 
 void SNImpl::NetStream::startRead() {
    if(HasFlag(state, SNI_IN_READ)) return;
 
-   std::scoped_lock lock(mutex);
+   // std::scoped_lock lock(mutex);
    asio::post(*context_, [this]() {
       doRead();
    });
@@ -23,10 +24,14 @@ void SNImpl::NetStream::startRead() {
 void SNImpl::NetStream::startWrite() {
    if(HasFlag(state, SNI_IN_WRITE)) return;
 
-   std::scoped_lock lock(mutex);
    asio::post(*context_, [this]() {
       doWrite();
    });
+}
+
+void SNImpl::NetStream::send(const std::vector<ubyte_8> msg) {
+   writeQ.push(msg);
+   startWrite();
 }
 
 void SNImpl::NetStream::stopRead() {
@@ -43,41 +48,60 @@ void SNImpl::NetStream::disconnect() {
 }
 
 void SNImpl::NetStream::doRead() {
-   std::scoped_lock lock(mutex);
+   // std::scoped_lock lock(mutex);
    auto readLambda = [this](std::error_code ec, std::size_t length) {
-      std::scoped_lock lock(this->mutex);
+      // std::scoped_lock lock(this->mutex);
       if(ec) {
+         std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_READ);
+         RemoveFlag(state, SNI_STOP_READ_R);
          return;
       }
 
       for (int i = 0; i < length; ++i) readQ.push(readBuffer[i]);
       onRead();
+
       if(HasFlag(state, SNI_STOP_READ_R)) {
          RemoveFlag(state, SNI_IN_READ);
-      } else doRead();
+         RemoveFlag(state, SNI_STOP_READ_R);
+         return;
+      }
+
+      doRead();
    };
 
    socket_.async_read_some(asio::buffer(readBuffer.data(), readBuffer.size()), readLambda);
 }
 
 void SNImpl::NetStream::doWrite() {
-   std::scoped_lock lock(mutex);
+   // std::scoped_lock lock(mutex);
+   if(writeQ.empty()) {
+      RemoveFlag(state, SNI_IN_WRITE);
+      RemoveFlag(state, SNI_STOP_WRITE_R);
+      return;
+   }
 
    auto writeLambda = [this](std::error_code ec, std::size_t length) {
-      std::scoped_lock lock(this->mutex);
+      // std::scoped_lock lock(this->mutex);
       if(ec) {
+         std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_WRITE);
+         RemoveFlag(state, SNI_STOP_WRITE_R);
+         return;
+      }
+      onWrite();
+
+      writeQ.pop();
+      if (writeQ.empty() || HasFlag(state, SNI_STOP_WRITE_R)) {
+         RemoveFlag(state, SNI_IN_WRITE);
+         RemoveFlag(state, SNI_STOP_WRITE_R);
          return;
       }
 
-      onWrite();
-      if(HasFlag(state, SNI_STOP_WRITE_R)) {
-         RemoveFlag(state, SNI_IN_WRITE);
-      } else doWrite();
+      doWrite();
    };
 
-   socket_.async_write_some(asio::buffer(writeBuffer.data(), writeBuffer.size()), writeLambda);
+   asio::async_write(socket_, asio::buffer(writeQ.front().data(), writeQ.front().size()), writeLambda);
 }
 
 void SNImpl::NetStream::doTick() {
@@ -100,13 +124,17 @@ SNImpl::Client::Client(std::shared_ptr<asio::io_context> context) : NetStream(co
 void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
 
-   auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints){
-      endpoints.clear();
-      for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it)
-         endpoints.push_back(it->endpoint());
-      RemoveFlag(state, SNI_RESOLVEING);
 
-      onResolve();
+   auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints){
+      RemoveFlag(state, SNI_RESOLVEING);
+      if(ec) {
+         std::cout << "resolve failed: " << ec.message() << "\n";
+      } else {
+         endpoints.clear();
+         for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it)
+            endpoints.push_back(it->endpoint());
+         onResolve();
+      }
    };
 
    AddFlag(state, SNI_RESOLVEING);
@@ -114,23 +142,40 @@ void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
 }
 
 void SNImpl::Client::addEndpoint(const std::string& host, ushort_16 port) {
-   endpoints.push_back(tcp::endpoint(asio::ip::make_address(host), port));
+   asio::error_code ec;
+   auto addr = asio::ip::make_address(host, ec);
+   if (ec) {
+      std::cout << "Invalid address (" << host << "): " << ec.message() << "\n";
+      return;
+   }
+   endpoints.push_back(tcp::endpoint(addr, port));
 }
-
 
 void SNImpl::Client::connect() {
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_CONNECTING)) return;
+   if(endpoints.empty()) return;
 
    auto connectLambda = [this](const std::error_code& ec, const tcp::endpoint& connectedEndpoint){
-      if(ec) {
-
-      }
       RemoveFlag(state, SNI_CONNECTING);
-      AddFlag(state, SNI_ONLINE);
-
-      onConnect();
+      if(ec) {
+         std::cout << "Connection failed\n";
+         return;
+      } else {
+         AddFlag(state, SNI_ONLINE);
+         onConnect();
+      }
    };
-   AddFlag(state, SNI_CONNECTING);
 
+   AddFlag(state, SNI_CONNECTING);
    asio::async_connect(socket_, endpoints, connectLambda);
+}
+
+void SNImpl::Client::printClient(std::string&& clientStr, const std::string& ip, ushort_16 port, bool wPort) {
+   std::cout << "\033[34m";
+   if (wPort) {
+      std::cout << "[Client: " << ip << ":" << port << "]: ";
+   } else
+      std::cout << "[Client]: ";
+   std::cout << "\033[0m";
+   std::cout << clientStr << "\n";
 }

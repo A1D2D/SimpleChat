@@ -13,7 +13,7 @@ namespace SN {
 
       bool empty() const {
          std::scoped_lock lock(queueMutex);
-         queueData.empty();
+         return queueData.empty();
       }
 
       unsigned int size() const {
@@ -42,7 +42,7 @@ namespace SN {
       }
       
    protected:
-      std::mutex queueMutex;
+      mutable std::mutex queueMutex;
       std::queue<T> queueData;
    };
 }
