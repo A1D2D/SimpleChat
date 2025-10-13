@@ -10,8 +10,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-class StringUtil {
-public:
+namespace StringUtil {
    static std::vector<std::string> split(const std::string& input, const std::string& delimiter) {
       std::vector<std::string> result;
       size_t start = 0;

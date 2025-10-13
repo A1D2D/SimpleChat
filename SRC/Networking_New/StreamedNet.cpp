@@ -1,6 +1,8 @@
 #include "StreamedNet.h"
 #include <iostream>
 
+thread_local unsigned int SN::OWLock::tl_recursion_count = 0;
+
 /*---------------------------NET_STREAM---------------------------*/
 SNImpl::NetStream::NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket) :
    context_(context), socket_(std::move(socket)), readBuffer(20 * 1024) {
@@ -74,7 +76,9 @@ void SNImpl::NetStream::doRead() {
 }
 
 void SNImpl::NetStream::doWrite() {
-   // std::scoped_lock lock(mutex);
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
    if(writeQ.empty()) {
       RemoveFlag(state, SNI_IN_WRITE);
       RemoveFlag(state, SNI_STOP_WRITE_R);
@@ -82,7 +86,8 @@ void SNImpl::NetStream::doWrite() {
    }
 
    auto writeLambda = [this](std::error_code ec, std::size_t length) {
-      // std::scoped_lock lock(this->mutex);
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
       if(ec) {
          std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_WRITE);
@@ -105,6 +110,8 @@ void SNImpl::NetStream::doWrite() {
 }
 
 void SNImpl::NetStream::doTick() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    asio::post(*context_, [this]() {
       doTick();
       onTick();
@@ -112,6 +119,7 @@ void SNImpl::NetStream::doTick() {
 }
 
 SNImpl::NetStream::~NetStream() {
+   oWLock.begin_destroy_and_wait();
 }
 
 
@@ -124,8 +132,13 @@ SNImpl::Client::Client(std::shared_ptr<asio::io_context> context) : NetStream(co
 void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
 
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
 
-   auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints){
+   auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints) {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
       RemoveFlag(state, SNI_RESOLVEING);
       if(ec) {
          std::cout << "resolve failed: " << ec.message() << "\n";
@@ -155,7 +168,10 @@ void SNImpl::Client::connect() {
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_CONNECTING)) return;
    if(endpoints.empty()) return;
 
-   auto connectLambda = [this](const std::error_code& ec, const tcp::endpoint& connectedEndpoint){
+   auto connectLambda = [this](const std::error_code& ec, const tcp::endpoint& connectedEndpoint) {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+      
       RemoveFlag(state, SNI_CONNECTING);
       if(ec) {
          std::cout << "Connection failed\n";

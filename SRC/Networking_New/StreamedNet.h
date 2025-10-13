@@ -70,7 +70,6 @@ namespace SNImpl {
 
       std::shared_ptr<asio::io_context> context_;
       tcp::socket socket_;
-      std::atomic<char> contextLock = NO_LOCK;
 
       std::vector<ubyte_8> readBuffer;
 
