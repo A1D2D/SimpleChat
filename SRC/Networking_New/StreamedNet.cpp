@@ -15,18 +15,27 @@ SNImpl::NetStream::NetStream(std::shared_ptr<asio::io_context> context) :
 }
 
 void SNImpl::NetStream::startRead() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    if(HasFlag(state, SNI_IN_READ)) return;
 
-   // std::scoped_lock lock(mutex);
    asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
       doRead();
    });
 }
 
 void SNImpl::NetStream::startWrite() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    if(HasFlag(state, SNI_IN_WRITE)) return;
 
    asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
       doWrite();
    });
 }
@@ -47,12 +56,24 @@ void SNImpl::NetStream::stopWrite() {
 }
 
 void SNImpl::NetStream::disconnect() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
+   asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+      abortConnection();
+   });
 }
 
 void SNImpl::NetStream::doRead() {
-   // std::scoped_lock lock(mutex);
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
    auto readLambda = [this](std::error_code ec, std::size_t length) {
-      // std::scoped_lock lock(this->mutex);
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
       if(ec) {
          std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_READ);
@@ -88,6 +109,7 @@ void SNImpl::NetStream::doWrite() {
    auto writeLambda = [this](std::error_code ec, std::size_t length) {
       SN::OWLockGuard guard(oWLock);
       if(!guard) return;
+
       if(ec) {
          std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_WRITE);
@@ -112,10 +134,37 @@ void SNImpl::NetStream::doWrite() {
 void SNImpl::NetStream::doTick() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
+
    asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
       doTick();
       onTick();
    });
+}
+
+void SNImpl::NetStream::abortConnection() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+   
+   if(HasNoFlag(state, SNI_ONLINE) && HasNoFlag(state, SNI_RESOLVEING) && HasNoFlag(state, SNI_CONNECTING) && !socket_.is_open()) return;
+   RemoveFlag(state, SNI_ONLINE);
+   RemoveFlag(state, SNI_RESOLVEING);
+   RemoveFlag(state, SNI_CONNECTING);
+
+   if(socket_.is_open()) {
+      ec = socket_.shutdown(tcp::socket::shutdown_both, ec);
+      //if (ec) onError(SNC::Error::AbortShutdownFailed, ec);
+      ec = socket_.close(ec);
+      //if (ec) onError(SNC::Error::AbortCloseFailed, ec);
+   }
+
+   /*if (parentRef) {
+      parentRef->stopContext();
+      parentRef->onDisconnect();
+      parentRef->onEvent(SNC::Event::Disconnected);
+   }*/
 }
 
 SNImpl::NetStream::~NetStream() {
@@ -130,10 +179,10 @@ SNImpl::Client::Client(std::shared_ptr<asio::io_context> context) : NetStream(co
 
 
 void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
-   if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
-
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
+
+   if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
 
    auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints) {
       SN::OWLockGuard guard(oWLock);
@@ -155,6 +204,9 @@ void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
 }
 
 void SNImpl::Client::addEndpoint(const std::string& host, ushort_16 port) {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
    asio::error_code ec;
    auto addr = asio::ip::make_address(host, ec);
    if (ec) {
@@ -165,6 +217,9 @@ void SNImpl::Client::addEndpoint(const std::string& host, ushort_16 port) {
 }
 
 void SNImpl::Client::connect() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_CONNECTING)) return;
    if(endpoints.empty()) return;
 

@@ -64,6 +64,10 @@ namespace SNImpl {
       virtual void onDisconnect() {}
       virtual void onTick() {}
 
+   private:
+      void abortConnection();
+
+   public:
       std::atomic<int> state;
 
       SN::OWLock oWLock;
@@ -75,6 +79,8 @@ namespace SNImpl {
 
       SN::TSQueue<std::vector<ubyte_8>> writeQ;
       SN::TSQueue<ubyte_8> readQ;
+
+      asio::error_code ec;
    };
 
    class Client : public NetStream {

@@ -114,7 +114,8 @@ int main(int argc, const char** argv) {
       }
       NL_CHECK(nl,0);
    }
+
+   if(contextThread.joinable()) contextThread.join();
    std::cout << "skipped" << std::endl;
-   // client.joinThread();   
    return 0;
 }
