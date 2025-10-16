@@ -31,10 +31,13 @@ using asio::ip::tcp;
 #define SNI_STOP_READ_R 16
 #define SNI_IN_WRITE 32
 #define SNI_STOP_WRITE_R 64
+#define SNI_IN_ACCEPT 128
+#define SNI_STOP_ACCEPT_R 256
 
 namespace SNImpl {
    using ubyte_8 = unsigned char;
    using ushort_16 = unsigned short;
+   class Server;
 
    enum ContextLock : char {
       NO_LOCK,
@@ -68,7 +71,7 @@ namespace SNImpl {
       void abortConnection();
 
    public:
-      std::atomic<int> state;
+      std::atomic<int> state = SNI_OFFLINE;
 
       SN::OWLock oWLock;
 
@@ -102,11 +105,42 @@ namespace SNImpl {
    };
 
    class Connection : public NetStream {
+   public:
+      Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted);
+      void start();
+      Server& getServer();
 
+      Server& server;
+      friend class Server;
    };
 
    class Server {
+   public:
+      Server(std::shared_ptr<asio::io_context> context);
 
+      void start(ushort_16 port);
+      void startAccept();
+      void stopAccept();
+
+      void doAccept();
+      ~Server();
+
+      static void printServer(std::string&& serverStr, ushort_16 port = 0, bool wPort = false);
+
+   public:
+      std::atomic<int> state = SNI_OFFLINE;
+
+      SN::OWLock oWLock;
+
+      std::shared_ptr<asio::io_context> context_;
+      asio::error_code ec;
+      std::optional<tcp::acceptor> acceptor;
+      std::optional<tcp::socket> pendingSocket;
+      ushort_16 port_ = 0;
+
+
+
+      friend class SNImpl::Connection;
    };
 }
 

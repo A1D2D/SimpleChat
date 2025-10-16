@@ -172,10 +172,9 @@ SNImpl::NetStream::~NetStream() {
 }
 
 
-/*---------------------------CLIENT---------------------------*/
-SNImpl::Client::Client(std::shared_ptr<asio::io_context> context) : NetStream(context), resolver(*context_) {
 
-}
+/*---------------------------CLIENT---------------------------*/
+SNImpl::Client::Client(std::shared_ptr<asio::io_context> context) : NetStream(context), resolver(*context_) {}
 
 
 void SNImpl::Client::resolve(const std::string& host, ushort_16 port) {
@@ -249,4 +248,78 @@ void SNImpl::Client::printClient(std::string&& clientStr, const std::string& ip,
       std::cout << "[Client]: ";
    std::cout << "\033[0m";
    std::cout << clientStr << "\n";
+}
+
+
+
+/*---------------------------CONNECTION---------------------------*/
+SNImpl::Connection::Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted) : NetStream(context, accepted), server(serverRef) {
+   AddFlag(state, SNI_ONLINE);
+}
+
+void SNImpl::Connection::start() {
+
+}
+
+SNImpl::Server& SNImpl::Connection::getServer() {
+   return server;
+}
+
+
+
+/*---------------------------SERVER---------------------------*/
+SNImpl::Server::Server(std::shared_ptr<asio::io_context> context) : context_(context) {}
+
+void SNImpl::Server::start(ushort_16 port) {
+   if(HasFlag(state, SNI_ONLINE)) {
+      return;
+   }
+
+   AddFlag(state, SNI_ONLINE);
+   port_ = port;
+
+   acceptor.emplace(*context_, tcp::endpoint(tcp::v4(), port));
+
+
+}
+
+void SNImpl::Server::startAccept() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+   if(HasFlag(state, SNI_IN_ACCEPT)) return;
+
+   asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
+      doAccept();
+   });
+}
+
+void SNImpl::Server::stopAccept() {
+   if(HasNoFlag(state, SNI_IN_ACCEPT)) return;
+   AddFlag(state, SNI_STOP_ACCEPT_R);
+}
+
+void SNImpl::Server::doAccept() {
+   if(!acceptor) {
+      RemoveFlag(state, SNI_OFFLINE);
+      RemoveFlag(state, SNI_STOP_ACCEPT_R);
+      return;
+   }
+
+   pendingSocket.emplace(*context_);
+}
+
+SNImpl::Server::~Server() {
+   oWLock.begin_destroy_and_wait();
+}
+
+void SNImpl::Server::printServer(std::string&& serverStr, ushort_16 port, bool wPort) {
+   std::cout << "\033[38;2;205;127;50m";
+   if (wPort) {
+      std::cout << "[Server: " << port << "]: ";
+   } else std::cout << "[Server]: ";
+   std::cout << "\033[0m";
+   std::cout << serverStr << "\n";
 }
