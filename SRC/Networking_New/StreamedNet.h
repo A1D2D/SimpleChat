@@ -110,6 +110,10 @@ namespace SNImpl {
       void start();
       Server& getServer();
 
+      virtual void onConnect() {}
+      virtual void onStart() {}
+      virtual void onDisconnect() {}
+
       Server& server;
       friend class Server;
    };
@@ -121,9 +125,20 @@ namespace SNImpl {
       void start(ushort_16 port);
       void startAccept();
       void stopAccept();
+      void close();
 
+      std::shared_ptr<asio::io_context> getContext();
+      ushort_16 getPort();
+      std::vector<std::shared_ptr<Connection>>& getConnections();
+
+      void serverAbort();
       void doAccept();
+      void doTick();
       ~Server();
+
+      virtual std::shared_ptr<Connection> onAccept(tcp::socket& socket);
+      virtual void onTick() {}
+      virtual void onStart() { startAccept(); }
 
       static void printServer(std::string&& serverStr, ushort_16 port = 0, bool wPort = false);
 
@@ -136,9 +151,8 @@ namespace SNImpl {
       asio::error_code ec;
       std::optional<tcp::acceptor> acceptor;
       std::optional<tcp::socket> pendingSocket;
+      std::vector<std::shared_ptr<Connection>> connections;
       ushort_16 port_ = 0;
-
-
 
       friend class SNImpl::Connection;
    };

@@ -78,6 +78,10 @@ add_executable(Server
    ServerMain.cpp
    SRC/Networking/StreamedNet.cpp
 )
+add_executable(DevServer
+   ServerMainDev.cpp
+   SRC/Networking_New/StreamedNet.cpp
+)
 
 if(WIN32)
    target_link_libraries(Client PRIVATE
@@ -97,4 +101,10 @@ if(WIN32)
       mswsock
    )
    target_compile_definitions(Server PRIVATE ASIO_STANDALONE)
+
+   target_link_libraries(DevServer PRIVATE 
+      ws2_32
+      mswsock
+   )
+   target_compile_definitions(DevServer PRIVATE ASIO_STANDALONE)
 endif()

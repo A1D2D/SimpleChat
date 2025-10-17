@@ -61,7 +61,6 @@ int main(int argc, const char** argv) {
    NestedLoop nl;
 
    std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
-
    std::thread contextThread;
 
    SimpleChatClient client(context);

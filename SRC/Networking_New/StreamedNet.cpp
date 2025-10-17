@@ -46,11 +46,15 @@ void SNImpl::NetStream::send(const std::vector<ubyte_8> msg) {
 }
 
 void SNImpl::NetStream::stopRead() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    if(HasNoFlag(state, SNI_IN_READ)) return;
    AddFlag(state, SNI_STOP_READ_R);
 }
 
 void SNImpl::NetStream::stopWrite() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    if(HasNoFlag(state, SNI_IN_WRITE)) return;
    AddFlag(state, SNI_STOP_WRITE_R);
 }
@@ -78,6 +82,8 @@ void SNImpl::NetStream::doRead() {
          std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_READ);
          RemoveFlag(state, SNI_STOP_READ_R);
+
+         abortConnection();
          return;
       }
 
@@ -114,6 +120,8 @@ void SNImpl::NetStream::doWrite() {
          std::cout << "writeError: " << ec.message() << "\n";
          RemoveFlag(state, SNI_IN_WRITE);
          RemoveFlag(state, SNI_STOP_WRITE_R);
+
+         abortConnection();
          return;
       }
       onWrite();
@@ -255,10 +263,11 @@ void SNImpl::Client::printClient(std::string&& clientStr, const std::string& ip,
 /*---------------------------CONNECTION---------------------------*/
 SNImpl::Connection::Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted) : NetStream(context, accepted), server(serverRef) {
    AddFlag(state, SNI_ONLINE);
+   onConnect();
 }
 
 void SNImpl::Connection::start() {
-
+   onStart();
 }
 
 SNImpl::Server& SNImpl::Connection::getServer() {
@@ -266,9 +275,10 @@ SNImpl::Server& SNImpl::Connection::getServer() {
 }
 
 
-
 /*---------------------------SERVER---------------------------*/
-SNImpl::Server::Server(std::shared_ptr<asio::io_context> context) : context_(context) {}
+SNImpl::Server::Server(std::shared_ptr<asio::io_context> context) : context_(context) {
+   doTick();
+}
 
 void SNImpl::Server::start(ushort_16 port) {
    if(HasFlag(state, SNI_ONLINE)) {
@@ -280,7 +290,7 @@ void SNImpl::Server::start(ushort_16 port) {
 
    acceptor.emplace(*context_, tcp::endpoint(tcp::v4(), port));
 
-
+   onStart();
 }
 
 void SNImpl::Server::startAccept() {
@@ -297,11 +307,20 @@ void SNImpl::Server::startAccept() {
 }
 
 void SNImpl::Server::stopAccept() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
    if(HasNoFlag(state, SNI_IN_ACCEPT)) return;
    AddFlag(state, SNI_STOP_ACCEPT_R);
 }
 
+void SNImpl::Server::close() {
+}
+
+
 void SNImpl::Server::doAccept() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
    if(!acceptor) {
       RemoveFlag(state, SNI_OFFLINE);
       RemoveFlag(state, SNI_STOP_ACCEPT_R);
@@ -309,6 +328,57 @@ void SNImpl::Server::doAccept() {
    }
 
    pendingSocket.emplace(*context_);
+
+   auto acceptLambda = [&](const asio::error_code& errorCode) {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+      
+      ec = errorCode;
+      if(ec) {
+         serverAbort();
+         return;
+      } else {
+         std::shared_ptr<Connection> connection = onAccept(*pendingSocket);
+         connection->start();
+         connections.emplace_back(std::move(connection));
+      }
+   };
+
+   acceptor->async_accept(*pendingSocket, acceptLambda);
+}
+
+void SNImpl::Server::doTick() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
+   asio::post(*context_, [this]() {
+      SN::OWLockGuard guard(oWLock);
+      if(!guard) return;
+
+      doTick();
+      onTick();
+   });
+}
+
+void SNImpl::Server::serverAbort() {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+}
+
+std::shared_ptr<asio::io_context> SNImpl::Server::getContext() {
+   return context_;
+}
+
+SNImpl::ushort_16 SNImpl::Server::getPort() {
+   return port_;
+}
+
+std::vector<std::shared_ptr<SNImpl::Connection>>& SNImpl::Server::getConnections() {
+   return connections;
+}
+
+std::shared_ptr<SNImpl::Connection> SNImpl::Server::onAccept(tcp::socket& socket) {
+   return std::make_shared<Connection>(context_, *this, socket);
 }
 
 SNImpl::Server::~Server() {
