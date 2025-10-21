@@ -51,9 +51,9 @@ protected:
       return std::make_shared<SimpleChatConnection>(this->getContext(), *this, socket);
    }
 
-   //void onDisconnect(std::shared_ptr<PN::PacketNetConnection<>> connection) override {
-   //   printServer("client disconnected", getPort(), true);
-   //}
+   void onDisconnect(std::shared_ptr<SNImpl::Connection> connection) override {
+      printServer("client disconnected", getPort(), true);
+   }
 };
 
 int main(int argc, const char** argv) {

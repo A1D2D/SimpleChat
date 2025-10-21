@@ -39,14 +39,35 @@ namespace SNImpl {
    using ushort_16 = unsigned short;
    class Server;
 
-   enum ContextLock : char {
-      NO_LOCK,
-      LIFTIME_H_LOCK,
-      CONTEXT_LOCK,
+   enum class Event {
+      OnStart,
+      Aborted,
+      Connected,
+      Resolved,
+      DataSent,
+      DataReceived,
+      Disconnected
+   };
+   enum class Error {
+      AlreadyStarted,
+      AlreadyResolved,
+      AlreadyConnected,
+      ConnectFailed,
+      ResolveFailed,
+      AcceptFailed,
+      ConnectionClosed,
+      Aborted,
+      WriteFailed,
+      ReadFailed,
+      AbortShutdownFailed,
+      AbortCloseFailed,
+      AcceptorAbortCancelFailed,
+      AcceptorAbortCloseFailed
    };
 
    class NetStream {
    public:
+
       NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket);
       NetStream(std::shared_ptr<asio::io_context> context);
    
@@ -66,6 +87,9 @@ namespace SNImpl {
       virtual void onWrite() {}
       virtual void onDisconnect() {}
       virtual void onTick() {}
+
+      virtual void onEvent(Event evt);
+      virtual void onError(Error err, const asio::error_code& ec);
 
    private:
       void abortConnection();
@@ -96,6 +120,9 @@ namespace SNImpl {
       virtual void onResolve() {}
       virtual void onConnect() {}
 
+      virtual void onEvent(Event evt) override;
+      virtual void onError(Error err, const asio::error_code& ec) override;
+
       tcp::resolver resolver;
 
       std::vector<tcp::endpoint> endpoints;
@@ -108,11 +135,16 @@ namespace SNImpl {
    public:
       Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted);
       void start();
+
       Server& getServer();
+      ~Connection();
 
       virtual void onConnect() {}
       virtual void onStart() {}
-      virtual void onDisconnect() {}
+      // virtual void onDisconnect() {}
+
+      virtual void onEvent(Event evt) override;
+      virtual void onError(Error err, const asio::error_code& ec) override;
 
       Server& server;
       friend class Server;
@@ -134,11 +166,17 @@ namespace SNImpl {
       void serverAbort();
       void doAccept();
       void doTick();
+      void removeConnection(Connection* connectionPtr);
       ~Server();
 
       virtual std::shared_ptr<Connection> onAccept(tcp::socket& socket);
       virtual void onTick() {}
       virtual void onStart() { startAccept(); }
+      virtual void onDisconnect(std::shared_ptr<Connection> connection) {}
+
+      virtual void onEvent(Event evt);
+      virtual void onError(Error err, const asio::error_code& ec);
+
 
       static void printServer(std::string&& serverStr, ushort_16 port = 0, bool wPort = false);
 

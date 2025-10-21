@@ -168,15 +168,89 @@ void SNImpl::NetStream::abortConnection() {
       //if (ec) onError(SNC::Error::AbortCloseFailed, ec);
    }
 
-   /*if (parentRef) {
-      parentRef->stopContext();
-      parentRef->onDisconnect();
-      parentRef->onEvent(SNC::Event::Disconnected);
-   }*/
+   onDisconnect();
+   onEvent(Event::Disconnected);
 }
 
 SNImpl::NetStream::~NetStream() {
    oWLock.begin_destroy_and_wait();
+}
+
+void SNImpl::NetStream::onEvent(Event evt) {
+   switch (evt) {
+      case Event::OnStart:
+         std::cout << "EVE OnStart\n";
+         break;
+      case Event::Aborted:
+         std::cout << "EVE Abort\n";
+         break;
+      case Event::Connected:
+         std::cout << "EVE Connected\n";
+         break;
+      case Event::Resolved:
+         std::cout << "EVE Resolved\n";
+         break;
+      case Event::DataSent:
+         std::cout << "EVE DataSent\n";
+         break;
+      case Event::DataReceived:
+         std::cout << "EVE DataReceived\n";
+         break;
+      case Event::Disconnected:
+         std::cout << "EVE Disconnected\n";
+         break;
+      default:
+         break;
+   }
+}
+
+void SNImpl::NetStream::onError(Error err, const asio::error_code& ec) {
+   switch (err) {
+      case Error::AlreadyStarted:
+         std::cout << "ERR AlreadyStarted" << ec.message() << "\n";
+         break;
+      case Error::AlreadyResolved:
+         std::cout << "ERR AlreadyResolved" << ec.message() << "\n";
+         break;
+      case Error::AlreadyConnected:
+         std::cout << "ERR AlreadyConnected" << ec.message() << "\n";
+         break;
+      case Error::ConnectFailed:
+         std::cout << "ERR ConnectFailed" << ec.message() << "\n";
+         break;
+      case Error::ResolveFailed:
+         std::cout << "ERR ResolveFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptFailed:
+         std::cout << "ERR AcceptFailed" << ec.message() << "\n";
+         break;
+      case Error::ConnectionClosed:
+         std::cout << "ERR ConnectionClosed" << ec.message() << "\n";
+         break;
+      case Error::Aborted:
+         std::cout << "ERR Aborted" << ec.message() << "\n";
+         break;
+      case Error::WriteFailed:
+         std::cout << "ERR WriteFailed" << ec.message() << "\n";
+         break;
+      case Error::ReadFailed:
+         std::cout << "ERR ReadFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortShutdownFailed:
+         std::cout << "ERR AbortShutdownFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortCloseFailed:
+         std::cout << "ERR AbortCloseFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCancelFailed:
+         std::cout << "ERR AcceptorAbortCancelFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCloseFailed:
+         std::cout << "ERR AcceptorAbortCloseFailed" << ec.message() << "\n";
+         break;
+      default:
+         break;
+   }
 }
 
 
@@ -258,7 +332,82 @@ void SNImpl::Client::printClient(std::string&& clientStr, const std::string& ip,
    std::cout << clientStr << "\n";
 }
 
+void SNImpl::Client::onEvent(Event evt) {
+   switch (evt) {
+      case Event::OnStart:
+         std::cout << "EVE OnStart\n";
+         break;
+      case Event::Aborted:
+         std::cout << "EVE Abort\n";
+         break;
+      case Event::Connected:
+         std::cout << "EVE Connected\n";
+         break;
+      case Event::Resolved:
+         std::cout << "EVE Resolved\n";
+         break;
+      case Event::DataSent:
+         std::cout << "EVE DataSent\n";
+         break;
+      case Event::DataReceived:
+         std::cout << "EVE DataReceived\n";
+         break;
+      case Event::Disconnected:
+         std::cout << "EVE Disconnected\n";
+         break;
+      default:
+         break;
+   }
+}
 
+void SNImpl::Client::onError(Error err, const asio::error_code& ec) {
+   switch (err) {
+      case Error::AlreadyStarted:
+         std::cout << "ERR AlreadyStarted" << ec.message() << "\n";
+         break;
+      case Error::AlreadyResolved:
+         std::cout << "ERR AlreadyResolved" << ec.message() << "\n";
+         break;
+      case Error::AlreadyConnected:
+         std::cout << "ERR AlreadyConnected" << ec.message() << "\n";
+         break;
+      case Error::ConnectFailed:
+         std::cout << "ERR ConnectFailed" << ec.message() << "\n";
+         break;
+      case Error::ResolveFailed:
+         std::cout << "ERR ResolveFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptFailed:
+         std::cout << "ERR AcceptFailed" << ec.message() << "\n";
+         break;
+      case Error::ConnectionClosed:
+         std::cout << "ERR ConnectionClosed" << ec.message() << "\n";
+         break;
+      case Error::Aborted:
+         std::cout << "ERR Aborted" << ec.message() << "\n";
+         break;
+      case Error::WriteFailed:
+         std::cout << "ERR WriteFailed" << ec.message() << "\n";
+         break;
+      case Error::ReadFailed:
+         std::cout << "ERR ReadFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortShutdownFailed:
+         std::cout << "ERR AbortShutdownFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortCloseFailed:
+         std::cout << "ERR AbortCloseFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCancelFailed:
+         std::cout << "ERR AcceptorAbortCancelFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCloseFailed:
+         std::cout << "ERR AcceptorAbortCloseFailed" << ec.message() << "\n";
+         break;
+      default:
+         break;
+   }
+}
 
 /*---------------------------CONNECTION---------------------------*/
 SNImpl::Connection::Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted) : NetStream(context, accepted), server(serverRef) {
@@ -272,6 +421,87 @@ void SNImpl::Connection::start() {
 
 SNImpl::Server& SNImpl::Connection::getServer() {
    return server;
+}
+
+SNImpl::Connection::~Connection() {
+   //oWLock.begin_destroy_and_wait();
+}
+
+void SNImpl::Connection::onEvent(Event evt) {
+   switch (evt) {
+      case Event::OnStart:
+         std::cout << "EVE OnStart\n";
+         break;
+      case Event::Aborted:
+         std::cout << "EVE Abort\n";
+         break;
+      case Event::Connected:
+         std::cout << "EVE Connected\n";
+         break;
+      case Event::Resolved:
+         std::cout << "EVE Resolved\n";
+         break;
+      case Event::DataSent:
+         std::cout << "EVE DataSent\n";
+         break;
+      case Event::DataReceived:
+         std::cout << "EVE DataReceived\n";
+         break;
+      case Event::Disconnected:
+         std::cout << "EVE Disconnected\n";
+         break;
+      default:
+         break;
+   }
+}
+
+void SNImpl::Connection::onError(Error err, const asio::error_code& ec) {
+   switch (err) {
+      case Error::AlreadyStarted:
+         std::cout << "ERR AlreadyStarted" << ec.message() << "\n";
+         break;
+      case Error::AlreadyResolved:
+         std::cout << "ERR AlreadyResolved" << ec.message() << "\n";
+         break;
+      case Error::AlreadyConnected:
+         std::cout << "ERR AlreadyConnected" << ec.message() << "\n";
+         break;
+      case Error::ConnectFailed:
+         std::cout << "ERR ConnectFailed" << ec.message() << "\n";
+         break;
+      case Error::ResolveFailed:
+         std::cout << "ERR ResolveFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptFailed:
+         std::cout << "ERR AcceptFailed" << ec.message() << "\n";
+         break;
+      case Error::ConnectionClosed:
+         std::cout << "ERR ConnectionClosed" << ec.message() << "\n";
+         break;
+      case Error::Aborted:
+         std::cout << "ERR Aborted" << ec.message() << "\n";
+         break;
+      case Error::WriteFailed:
+         std::cout << "ERR WriteFailed" << ec.message() << "\n";
+         break;
+      case Error::ReadFailed:
+         std::cout << "ERR ReadFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortShutdownFailed:
+         std::cout << "ERR AbortShutdownFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortCloseFailed:
+         std::cout << "ERR AbortCloseFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCancelFailed:
+         std::cout << "ERR AcceptorAbortCancelFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCloseFailed:
+         std::cout << "ERR AcceptorAbortCloseFailed" << ec.message() << "\n";
+         break;
+      default:
+         break;
+   }
 }
 
 
@@ -360,6 +590,10 @@ void SNImpl::Server::doTick() {
    });
 }
 
+void SNImpl::Server::removeConnection(Connection* connectionPtr) {
+   
+}
+
 void SNImpl::Server::serverAbort() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
@@ -379,6 +613,83 @@ std::vector<std::shared_ptr<SNImpl::Connection>>& SNImpl::Server::getConnections
 
 std::shared_ptr<SNImpl::Connection> SNImpl::Server::onAccept(tcp::socket& socket) {
    return std::make_shared<Connection>(context_, *this, socket);
+}
+
+void SNImpl::Server::onEvent(Event evt) {
+   switch (evt) {
+      case Event::OnStart:
+         std::cout << "EVE OnStart\n";
+         break;
+      case Event::Aborted:
+         std::cout << "EVE Abort\n";
+         break;
+      case Event::Connected:
+         std::cout << "EVE Connected\n";
+         break;
+      case Event::Resolved:
+         std::cout << "EVE Resolved\n";
+         break;
+      case Event::DataSent:
+         std::cout << "EVE DataSent\n";
+         break;
+      case Event::DataReceived:
+         std::cout << "EVE DataReceived\n";
+         break;
+      case Event::Disconnected:
+         std::cout << "EVE Disconnected\n";
+         break;
+      default:
+         break;
+   }
+}
+
+void SNImpl::Server::onError(Error err, const asio::error_code& ec) {
+   switch (err) {
+      case Error::AlreadyStarted:
+         std::cout << "ERR AlreadyStarted" << ec.message() << "\n";
+         break;
+      case Error::AlreadyResolved:
+         std::cout << "ERR AlreadyResolved" << ec.message() << "\n";
+         break;
+      case Error::AlreadyConnected:
+         std::cout << "ERR AlreadyConnected" << ec.message() << "\n";
+         break;
+      case Error::ConnectFailed:
+         std::cout << "ERR ConnectFailed" << ec.message() << "\n";
+         break;
+      case Error::ResolveFailed:
+         std::cout << "ERR ResolveFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptFailed:
+         std::cout << "ERR AcceptFailed" << ec.message() << "\n";
+         break;
+      case Error::ConnectionClosed:
+         std::cout << "ERR ConnectionClosed" << ec.message() << "\n";
+         break;
+      case Error::Aborted:
+         std::cout << "ERR Aborted" << ec.message() << "\n";
+         break;
+      case Error::WriteFailed:
+         std::cout << "ERR WriteFailed" << ec.message() << "\n";
+         break;
+      case Error::ReadFailed:
+         std::cout << "ERR ReadFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortShutdownFailed:
+         std::cout << "ERR AbortShutdownFailed" << ec.message() << "\n";
+         break;
+      case Error::AbortCloseFailed:
+         std::cout << "ERR AbortCloseFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCancelFailed:
+         std::cout << "ERR AcceptorAbortCancelFailed" << ec.message() << "\n";
+         break;
+      case Error::AcceptorAbortCloseFailed:
+         std::cout << "ERR AcceptorAbortCloseFailed" << ec.message() << "\n";
+         break;
+      default:
+         break;
+   }
 }
 
 SNImpl::Server::~Server() {
