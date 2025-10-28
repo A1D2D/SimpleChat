@@ -48,7 +48,7 @@ namespace SNImpl {
       void close();
       
       void acceptClients();
-      void serverAbort();
+      void abort();
       void removeConnection(std::shared_ptr<SN::StreamedNetConnection> connection);
 
       SN::StreamedNetServer* parentRef;

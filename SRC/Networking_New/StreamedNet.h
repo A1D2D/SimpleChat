@@ -48,6 +48,7 @@ namespace SNImpl {
       DataReceived,
       Disconnected
    };
+   
    enum class Error {
       AlreadyStarted,
       AlreadyResolved,
@@ -67,7 +68,6 @@ namespace SNImpl {
 
    class NetStream {
    public:
-
       NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket);
       NetStream(std::shared_ptr<asio::io_context> context);
    
@@ -83,6 +83,9 @@ namespace SNImpl {
       void doTick();
       ~NetStream();
 
+   protected:
+      void abort();
+
       virtual void onRead() {}
       virtual void onWrite() {}
       virtual void onDisconnect() {}
@@ -90,9 +93,6 @@ namespace SNImpl {
 
       virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
-
-   private:
-      void abortConnection();
 
    public:
       std::atomic<int> state = SNI_OFFLINE;
@@ -110,15 +110,25 @@ namespace SNImpl {
       asio::error_code ec;
    };
 
+
    class Client : public NetStream {
    public:
       Client(std::shared_ptr<asio::io_context> context);
       void resolve(const std::string& host, ushort_16 port);
       void addEndpoint(const std::string& host, ushort_16 port);
       void connect();
+      void disconnect();
+
+   protected:
+      void abort();
 
       virtual void onResolve() {}
       virtual void onConnect() {}
+
+      virtual void onRead() override {}
+      virtual void onWrite() override {}
+      virtual void onDisconnect() override {}
+      virtual void onTick() override {}
 
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
@@ -135,13 +145,20 @@ namespace SNImpl {
    public:
       Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted);
       void start();
+      void disconnect();
 
       Server& getServer();
-      ~Connection();
+
+   protected:
+      void abort();
 
       virtual void onConnect() {}
       virtual void onStart() {}
-      // virtual void onDisconnect() {}
+
+      virtual void onRead() override {}
+      virtual void onWrite() override {}
+      virtual void onDisconnect() override {}
+      virtual void onTick() override {}
 
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
@@ -149,6 +166,7 @@ namespace SNImpl {
       Server& server;
       friend class Server;
    };
+
 
    class Server {
    public:
@@ -163,7 +181,7 @@ namespace SNImpl {
       ushort_16 getPort();
       std::vector<std::shared_ptr<Connection>>& getConnections();
 
-      void serverAbort();
+      void abort();
       void doAccept();
       void doTick();
       void removeConnection(Connection* connectionPtr);
@@ -176,7 +194,6 @@ namespace SNImpl {
 
       virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
-
 
       static void printServer(std::string&& serverStr, ushort_16 port = 0, bool wPort = false);
 

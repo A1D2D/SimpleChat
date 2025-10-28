@@ -473,7 +473,7 @@ void Server::start(ushort_16 port) {
 
 void Server::close() {
    asio::post(context_, [this]() {
-      serverAbort();
+      abort();
    });
    if (parentRef) parentRef->joinThread();
 }
@@ -485,11 +485,11 @@ void Server::acceptClients() {
    auto aceptLambda = [&](const asio::error_code& ec) {
       if (ec) {
          if (parentRef) parentRef->onError(SNS::Error::AcceptFailed, ec);
-         serverAbort();
+         abort();
          return;
       } else {
          if (!parentRef) {
-            serverAbort();
+            abort();
             return;
          }
          std::shared_ptr<StreamedNetConnection> connection = parentRef->onAccept(*pendingSocket);
@@ -502,7 +502,7 @@ void Server::acceptClients() {
    acceptor->async_accept(*pendingSocket, aceptLambda);
 }
 
-void Server::serverAbort() {
+void Server::abort() {
    if (HasFlag(state, SNS::Online)) {
       RemoveFlag(state, SNS::Online);
 
