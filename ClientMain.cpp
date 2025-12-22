@@ -1,10 +1,10 @@
-#include <VORTEX_MP/NestedLoops>
+#include "SRC/Util/NestedLoops.h"
 #include <iostream>
 #include <string>
+#include <vector>
 
+#include "SRC/Networking/StreamedNet.h"
 #include "SRC/Util/StringUtil.h"
-
-#include "SRC/Networking/PacketNet.h"
 
 enum ClientCommand {
    CC_Connect,
@@ -14,14 +14,28 @@ enum ClientCommand {
    CC_Test_F
 };
 
-class SimpleChatClient : public PN::PacketNetClient<> {
+class SimpleChatClient : public SN::Client {
+public:
+   using SN::Client::Client;
+
 protected:
-   void onPacket(const PN::DefaultPacket& data) override {
-      std::cout << "[Server]: " << StringUtil::bytesToString(data.data) << std::endl;
+   void onResolve() override {
+      std::cout << "resolve succesfull\n";
+      connect();
    }
 
-   void onStart() override {
-      sendHandshake();
+   void onConnect() override {
+      std::cout << "connect succesfull\n";
+      startRead();
+   }
+   
+   void onRead() override {
+      std::cout << "Server: ";
+      while (!readQ.empty()) {
+         std::cout << readQ.front();
+         readQ.pop();
+      }
+      std::cout << "\n";
    }
 };
 
@@ -40,14 +54,15 @@ int main(int argc, const char** argv) {
       {"/exit", CC_Exit}
    };
 
-   Colorb::SKY_BLUE.printAnsiStyle();
-   std::cout << "SimpleChat\n";
-   resetAnsiStyle();
+   // Colorb::SKY_BLUE.printAnsiStyle();
+   std::cout << "SimpleChat: Client\n";
+   // resetAnsiStyle();
 
-   NestedLoop nl;
+   asio::io_context context;
+   SimpleChatClient client(context);
+   client.context.startThread();
 
-   SimpleChatClient client;
-
+   SN::NestedLoop nl;
    for (;;) {
       std::getline(std::cin, msg);
       args = StringUtil::split(msg, " ");
@@ -71,14 +86,14 @@ int main(int argc, const char** argv) {
          }
          case CC_Connect: {
             auto ip = StringUtil::parseArg<std::string>(args, 0);
-            auto port = StringUtil::parseArg<ushort_16>(args, 1);
+            auto port = StringUtil::parseArg<uint16_t>(args, 1);
             if(!port || !ip) {
                std::cerr << "incorrect arg usage\n";
                continue;
             }
 
-            SN::StreamedNetClient::printClient("Connecting to Server..", *ip, *port, true);
-            client.autoConnect(*ip, *port);
+            SN::Client::printClient("Connecting to Server..", *ip, *port, true);
+            client.resolve(*ip, *port);
             break;
          }
          case CC_Disconnect: {
@@ -86,14 +101,14 @@ int main(int argc, const char** argv) {
             break;
          }
          default: {
-            SN::StreamedNetClient::printClient(""+msg);
-            client.sendPacket(StringUtil::stringToBytes(msg));
+            SN::Client::printClient(""+msg);
+            client.send(StringUtil::stringToBytes(msg));
             break;
          }
       }
       NL_CHECK(nl,0);
    }
-   std::cout << "skipped" << std::endl;
-   client.joinThread();   
+
+   client.context.stopThread();
    return 0;
 }

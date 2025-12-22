@@ -1,5 +1,5 @@
-#ifndef NETWORK_PACKET_NET_TEMPLATED_H
-#define NETWORK_PACKET_NET_TEMPLATED_H
+#ifndef NCORE_PACKET_NET_TEMPLATED_H
+#define NCORE_PACKET_NET_TEMPLATED_H
 
 #include <type_traits>
 #include <vector>
@@ -9,47 +9,44 @@
 #include "StreamedNet.h"
 
 #define SERIALIZABLE(...) \
-   std::vector<ubyte_8> serialize() const override { std::vector<ubyte_8> buf; PN::serializeFields(buf, __VA_ARGS__);  return buf; } \
-   bool deserialize(const std::vector<ubyte_8>& buf, size_t& offset) override { return PN::deserializeFields(buf, offset, __VA_ARGS__); }
+   std::vector<uint8_t> serialize() const override { std::vector<uint8_t> buf; PN::serializeFields(buf, __VA_ARGS__);  return buf; } \
+   bool deserialize(const std::vector<uint8_t>& buf, size_t& offset) override { return PN::deserializeFields(buf, offset, __VA_ARGS__); }
 
 namespace PN {
-   using namespace SN;
-   using ulong_64 = std::uint64_t;
-
    struct PacketNetPacket {
       PacketNetPacket() = default;
       virtual ~PacketNetPacket() = default;
-      virtual bool deserializeHead(std::vector<ubyte_8>& incoming) = 0;
+      virtual bool deserializeHead(std::vector<uint8_t>& incoming) = 0;
       virtual bool checkHead() = 0;
       
-      virtual bool deserializeEnd(std::vector<ubyte_8>& incoming) = 0;
+      virtual bool deserializeEnd(std::vector<uint8_t>& incoming) = 0;
       virtual bool checkEnd() = 0;
 
-      virtual std::vector<ubyte_8>& readData(std::vector<ubyte_8>& incoming) = 0;
-      virtual void erase(std::vector<ubyte_8>& incoming) = 0;
+      virtual std::vector<uint8_t>& readData(std::vector<uint8_t>& incoming) = 0;
+      virtual void erase(std::vector<uint8_t>& incoming) = 0;
 
-      virtual std::vector<ubyte_8> serialize() const = 0;
+      virtual std::vector<uint8_t> serialize() const = 0;
    };
 
    struct DefaultPacket : PacketNetPacket {
       constexpr static const std::string_view headSpecifier = "PN_PACKET";
       constexpr static const std::string_view endSpecifier = "<~PN>";
-      constexpr static const ulong_64 maxPacketSize = 64*1024*1024;
+      constexpr static const uint64_t maxPacketSize = 64*1024*1024;
       std::string_view readHeadSpecifier{};
       std::string_view readEndSpecifier{};
-      ulong_64 len;
-      std::vector<ubyte_8> data;
+      uint64_t len;
+      std::vector<uint8_t> data;
 
       DefaultPacket() : len(0) {}
 
-      DefaultPacket(const std::vector<ubyte_8>& packetData) {
+      DefaultPacket(const std::vector<uint8_t>& packetData) {
          data = packetData;
          len = data.size();
       }
 
       ~DefaultPacket() override {}
 
-      bool deserializeHead(std::vector<ubyte_8>& incoming) override {
+      bool deserializeHead(std::vector<uint8_t>& incoming) override {
          if(incoming.size() < headSpecifier.size() + 8) return false;
          
          readHeadSpecifier = std::string_view(reinterpret_cast<char*>(incoming.data()), headSpecifier.size());
@@ -65,7 +62,7 @@ namespace PN {
          return readHeadSpecifier == headSpecifier;
       }
 
-      bool deserializeEnd(std::vector<ubyte_8>& incoming) override {
+      bool deserializeEnd(std::vector<uint8_t>& incoming) override {
          if(incoming.size() < headSpecifier.size() + 8 + len) return false;
 
          readEndSpecifier = std::string_view(reinterpret_cast<char*>(incoming.data() + headSpecifier.size() + 8 + len), endSpecifier.size());
@@ -76,17 +73,17 @@ namespace PN {
          return readEndSpecifier == endSpecifier;
       }
 
-      std::vector<ubyte_8>& readData(std::vector<ubyte_8>& incoming) override {
-         data = std::vector<ubyte_8>(incoming.begin() + headSpecifier.size() + 8, incoming.begin() + headSpecifier.size() + 8 + len);
+      std::vector<uint8_t>& readData(std::vector<uint8_t>& incoming) override {
+         data = std::vector<uint8_t>(incoming.begin() + headSpecifier.size() + 8, incoming.begin() + headSpecifier.size() + 8 + len);
          return data;
       }
 
-      void erase(std::vector<ubyte_8>& incoming) override {
+      void erase(std::vector<uint8_t>& incoming) override {
          incoming.erase(incoming.begin(), incoming.begin() + headSpecifier.size() + 8 + len + endSpecifier.size());
       }
 
-      std::vector<ubyte_8> serialize() const override {
-         std::vector<ubyte_8> buf(headSpecifier.size() + 8 + data.size() + endSpecifier.size());
+      std::vector<uint8_t> serialize() const override {
+         std::vector<uint8_t> buf(headSpecifier.size() + 8 + data.size() + endSpecifier.size());
 
          std::memcpy(buf.data(), headSpecifier.data(), headSpecifier.size());
          std::memcpy(buf.data() + headSpecifier.size(), &len, 8);
@@ -98,8 +95,8 @@ namespace PN {
    };
 
    struct Serializable {
-      virtual std::vector<ubyte_8> serialize() const = 0;
-      virtual bool deserialize(const std::vector<ubyte_8>& buf, size_t& offset) = 0;
+      virtual std::vector<uint8_t> serialize() const = 0;
+      virtual bool deserialize(const std::vector<uint8_t>& buf, size_t& offset) = 0;
       virtual ~Serializable() = default;
    };
 
@@ -114,32 +111,32 @@ namespace PN {
 
    //<POD types>
    template<typename T>
-   inline void writeAny(std::vector<ubyte_8>& buf, const T& v) {
+   inline void writeAny(std::vector<uint8_t>& buf, const T& v) {
       if constexpr (std::is_same_v<T, std::string>) {
-         writeAny(buf, static_cast<ulong_64>(v.size()));
+         writeAny(buf, static_cast<uint64_t>(v.size()));
          buf.insert(buf.end(), v.begin(), v.end());
       }
       else if constexpr (SerializableType<T>) {
          auto tmp = v.serialize();
          writeAny(buf, tmp);
       }
-      else if constexpr (std::is_same_v<T, std::vector<ubyte_8>>) {
-         writeAny(buf, static_cast<ulong_64>(v.size()));
+      else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+         writeAny(buf, static_cast<uint64_t>(v.size()));
          buf.insert(buf.end(), v.begin(), v.end());
       }
       else if constexpr (is_specialization<T, std::vector>::value) {
-         writeAny(buf, static_cast<ulong_64>(v.size()));
+         writeAny(buf, static_cast<uint64_t>(v.size()));
          for (auto& e : v) writeAny(buf, e);
       }
       else if constexpr (is_specialization<T, std::map>::value) {
-         writeAny(buf, static_cast<ulong_64>(v.size()));
+         writeAny(buf, static_cast<uint64_t>(v.size()));
          for (auto& [k, val] : v) {
             writeAny(buf, k);
             writeAny(buf, val);
          }
       }
       else if constexpr (std::is_trivially_copyable_v<T>) {
-         auto ptr = reinterpret_cast<const ubyte_8*>(&v);
+         auto ptr = reinterpret_cast<const uint8_t*>(&v);
          buf.insert(buf.end(), ptr, ptr + sizeof(T));
       }
       else {
@@ -148,9 +145,9 @@ namespace PN {
    }
 
    template<typename T>
-   inline bool readAny(const std::vector<ubyte_8>& buf, ulong_64& offset, T& v) {
+   inline bool readAny(const std::vector<uint8_t>& buf, uint64_t& offset, T& v) {
       if constexpr (std::is_same_v<T, std::string>) {
-         ulong_64 size;
+         uint64_t size;
          if (!readAny(buf, offset, size)) return false;
          if (offset + size > buf.size()) return false;
          v.assign(reinterpret_cast<const char*>(buf.data() + offset), size);
@@ -158,13 +155,13 @@ namespace PN {
          return true;
       }
       else if constexpr (SerializableType<T>) {
-         std::vector<ubyte_8> tmp;
+         std::vector<uint8_t> tmp;
          if (!readAny(buf, offset, tmp)) return false;
-         ulong_64 innerOffset = 0;
+         uint64_t innerOffset = 0;
          return v.deserialize(tmp, innerOffset);
       }
-      else if constexpr (std::is_same_v<T, std::vector<ubyte_8>>) {
-         ulong_64 size;
+      else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+         uint64_t size;
          if (!readAny(buf, offset, size)) return false;
          if (offset + size > buf.size()) return false;
          v.assign(buf.begin() + offset, buf.begin() + offset + size);
@@ -172,11 +169,11 @@ namespace PN {
          return true;
       }
       else if constexpr (is_specialization<T, std::vector>::value) {
-         ulong_64 size;
+         uint64_t size;
          if (!readAny(buf, offset, size)) return false;
          v.clear();
          v.reserve(size);
-         for (ulong_64 i = 0; i < size; i++) {
+         for (uint64_t i = 0; i < size; i++) {
             typename T::value_type tmp;
             if (!readAny(buf, offset, tmp)) return false;
             v.push_back(std::move(tmp));
@@ -184,10 +181,10 @@ namespace PN {
          return true;
       }
       else if constexpr (is_specialization<T, std::map>::value) {
-         ulong_64 size;
+         uint64_t size;
          if (!readAny(buf, offset, size)) return false;
          v.clear();
-         for (ulong_64 i = 0; i < size; i++) {
+         for (uint64_t i = 0; i < size; i++) {
             typename T::key_type key;
             typename T::mapped_type val;
             if (!readAny(buf, offset, key)) return false;
@@ -208,18 +205,18 @@ namespace PN {
    }
    //<~POD types>
 
-   inline void serializeFields(std::vector<ubyte_8>&) {}
+   inline void serializeFields(std::vector<uint8_t>&) {}
 
    template<typename T, typename... Rest>
-   inline void serializeFields(std::vector<ubyte_8>& buf, const T& first, const Rest&... rest) {
+   inline void serializeFields(std::vector<uint8_t>& buf, const T& first, const Rest&... rest) {
       writeAny(buf, first);
       serializeFields(buf, rest...);
    }
 
-   inline bool deserializeFields(const std::vector<ubyte_8>&, ulong_64&) { return true; }
+   inline bool deserializeFields(const std::vector<uint8_t>&, uint64_t&) { return true; }
 
    template<typename T, typename... Rest>
-   inline bool deserializeFields(const std::vector<ubyte_8>& buf, ulong_64& offset, T& first, Rest&... rest) {
+   inline bool deserializeFields(const std::vector<uint8_t>& buf, uint64_t& offset, T& first, Rest&... rest) {
       if (!readAny(buf, offset, first)) return false;
       return deserializeFields(buf, offset, rest...);
    }
@@ -229,9 +226,9 @@ namespace PN {
 
 
    template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<PacketNetPacket, T> && std::is_base_of_v<PacketNetPacket, U>>>
-   class PacketNetClient : public StreamedNetClient {
+   class PacketNetClient : public SN::Client {
    public:
-      using StreamedNetClient::StreamedNetClient;
+      using SN::Client::Client;
 
       void sendHandshake() {
          sendHandshake(U());
@@ -254,8 +251,11 @@ namespace PN {
       }
 
    protected:
-      virtual void onReceive(const std::vector<ubyte_8>& data) override {
-         incoming.insert(incoming.end(), data.begin(), data.end());
+      virtual void onRead() override {
+         while (!readQ.empty()) {
+            incoming.push_back(readQ.front());
+            readQ.pop();
+         }
          // std::cout << "FullPacket: " << StringUtil::bytesToString(incoming) << "\n";
          processPackets();
       }
@@ -267,7 +267,7 @@ namespace PN {
       bool firstSend = true;
 
    private:
-      std::vector<ubyte_8> incoming;
+      std::vector<uint8_t> incoming;
 
       void processPackets() {
          while (true) {
@@ -302,14 +302,14 @@ namespace PN {
 
 
    template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<PacketNetPacket, T> && std::is_base_of_v<PacketNetPacket, U>>>
-   class PacketNetConnection : public StreamedNetConnection {
+   class PacketNetConnection : public SN::Connection {
    public:
-      using StreamedNetConnection::StreamedNetConnection;
+      using SN::Connection::Connection;
 
-      PacketNetConnection(asio::io_context& context, PacketNetServer<T, U>& serverRef, tcp::socket& accepted) : StreamedNetConnection(context, serverRef, accepted) {}
+      PacketNetConnection(asio::io_context& context, PacketNetServer<T, U>& serverRef, tcp::socket& accepted) : SN::Connection(context, serverRef, accepted) {}
 
       PacketNetServer<T, U>& getServer() {
-         return static_cast<PacketNetServer<T, U>&>(StreamedNetConnection::getServer());
+         return static_cast<PacketNetServer<T, U>&>(Connection::getServer());
       }
 
       void sendHandshake() {
@@ -333,8 +333,11 @@ namespace PN {
       }
 
    protected:
-      void onReceive(const std::vector<ubyte_8>& data) override {
-         incoming.insert(incoming.end(), data.begin(), data.end());
+      virtual void onRead() override {
+         while (!readQ.empty()) {
+            incoming.push_back(readQ.front());
+            readQ.pop();
+         }
          // std::cout << "FullPacket: " << StringUtil::bytesToString(incoming) << "\n";
          processPackets();
       }
@@ -346,7 +349,7 @@ namespace PN {
       bool firstSend = true;
 
    private:
-      std::vector<ubyte_8> incoming;
+      std::vector<uint8_t> incoming;
 
       void processPackets() {
          while (true) {
@@ -381,19 +384,19 @@ namespace PN {
 
 
    template <typename T, typename U, typename>
-   class PacketNetServer : public StreamedNetServer {
+   class PacketNetServer : public SN::Server {
    public:
-      using StreamedNetServer::StreamedNetServer;
+      using SN::Server::Server;
 
       std::vector<std::shared_ptr<PacketNetConnection<T, U>>> getConnections() {
          std::vector<std::shared_ptr<PacketNetConnection<T, U>>> out;
-         for (auto& conn : StreamedNetServer::getConnections()) {
+         for (auto& conn : SN::Server::getConnections()) {
             out.emplace_back(std::static_pointer_cast<PacketNetConnection<T, U>>(conn));
          }
          return out;
       }
 
-      void onDisconnect(std::shared_ptr<StreamedNetConnection> connection) override {
+      void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
          auto derivedConn = std::static_pointer_cast<PN::PacketNetConnection<T, U>>(connection);
          onDisconnect(derivedConn);
       }
@@ -402,4 +405,4 @@ namespace PN {
    };
 }
 
-#endif // NETWORK_PACKET_NET_TEMPLATED_H
+#endif //~NCORE_PACKET_NET_TEMPLATED_H

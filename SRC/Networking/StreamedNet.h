@@ -1,7 +1,8 @@
-#ifndef NETWORK_STREAMED_NET_H
-#define NETWORK_STREAMED_NET_H
+#ifndef NCORE_STREAMED_NET_H
+#define NCORE_STREAMED_NET_H
+
 #include <memory>
-#include <thread>
+#include <string>
 
 #ifdef _WIN32
    #undef WINAPI_FAMILY
@@ -12,217 +13,208 @@
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 
+#include "NetContextRef.h"
+#include "NetTSQueue.h"
+#include "NetOWLock.h"
+
+
 #define FlagDef(ID) (1LL << ((ID)-1))
 #define HasFlag(flags, flag) (((flags) & (flag)) != 0)
+#define HasNoFlag(flags, flag) (((flags) & (flag)) == 0)
 #define AddFlag(flags, flag) ((flags) |= (flag))
 #define RemoveFlag(flags, flag) ((flags) &= ~(flag))
 
 using asio::ip::tcp;
 
-namespace SNImpl {
-   class Client;
-   class Server;
-}
+#define SNI_OFFLINE 0
+#define SNI_ONLINE 1
+#define SNI_RESOLVEING 2
+#define SNI_CONNECTING 4
+#define SNI_IN_READ 8
+#define SNI_STOP_READ_R 16
+#define SNI_IN_WRITE 32
+#define SNI_STOP_WRITE_R 64
+#define SNI_IN_ACCEPT 128
+#define SNI_STOP_ACCEPT_R 256
 
 namespace SN {
-   class StreamedNetServer;
-   using ubyte_8 = std::uint8_t;
-   using ushort_16 = std::uint16_t;
+   class Server;
 
-   class StreamedNetClient {
-   public:
-      enum State {
-         Offline = 0,
-         Online = FlagDef(1),
-         Connecting = FlagDef(2),
-      };
-      enum class Event {
-         Connected,
-         Resolved,
-         DataSent,
-         DataReceived,
-         Disconnected
-      };
-      enum class Error {
-         AlreadyConnected,
-         ConnectFailed,
-         ResolveFailed,
-         ConnectionClosed,
-         Aborted,
-         WriteFailed,
-         ReadFailed,
-         AbortShutdownFailed,
-         AbortCloseFailed
-      };
-
-      StreamedNetClient(asio::io_context& context);
-      StreamedNetClient();
-      ~StreamedNetClient();
-
-      StreamedNetClient(const StreamedNetClient&) = delete;
-      StreamedNetClient& operator=(const StreamedNetClient&) = delete;
-
-      StreamedNetClient(StreamedNetClient&& other) noexcept;
-      StreamedNetClient& operator=(StreamedNetClient&& other) noexcept;
-
-      void autoConnect(const std::string& ip, ushort_16 port);
-      void send(const std::vector<ubyte_8>& msg);
-      void send(const std::string& msg);
-      void disconnect();
-      void startThread();
-      void joinThread();
-      void stopContext();
-
-      asio::io_context& getContext();
-      ushort_16 getPort();
-      const std::string getIp();
-      tcp::resolver::results_type& getREndpoints();
-      const tcp::endpoint& getCEndpoints();
-      tcp::socket& getSocket();
-      ubyte_8 getState();
-
-      static void printClient(std::string&& clientStr, const std::string& ip = "localhost", ushort_16 port = 0, bool wPort = false);
-      friend class SNImpl::Client;
-
-   protected:
-      virtual void onConnect() {}
-      virtual void onStart() {}
-      virtual void onResolve() {}
-      virtual void onDisconnect() {}
-      virtual void onReceive(const std::vector<ubyte_8>& data) {}
-      virtual void onEvent(Event evt);
-      virtual void onError(Error err, const asio::error_code& ec);
-
-      std::thread thr;
-
-   private:
-      std::unique_ptr<asio::io_context> contextPtr_;
-
-   protected:
-      asio::io_context* context_;
-   private:
-      std::shared_ptr<SNImpl::Client> clientPtr;
+   enum class Event {
+      OnStart,
+      Aborted,
+      Connected,
+      Resolved,
+      DataSent,
+      DataReceived,
+      Disconnected
+   };
+   
+   enum class Error {
+      AlreadyStarted,
+      AlreadyResolved,
+      AlreadyConnected,
+      ConnectFailed,
+      ResolveFailed,
+      AcceptFailed,
+      ConnectionClosed,
+      Aborted,
+      WriteFailed,
+      ReadFailed,
+      AbortShutdownFailed,
+      AbortCloseFailed,
+      AcceptorAbortCancelFailed,
+      AcceptorAbortCloseFailed
    };
 
-   class StreamedNetConnection : public std::enable_shared_from_this<StreamedNetConnection> {
+   class NetStream {
    public:
-      enum State {
-         Offline = 0,
-         Online = FlagDef(1)
-      };
-      enum class Event {
-         DataSent,
-         DataReceived,
-         Disconnected
-      };
-      enum class Error {
-         ConnectionClosed,
-         Aborted,
-         WriteFailed,
-         ReadFailed
-      };
-
-      StreamedNetConnection(asio::io_context& context, StreamedNetServer& serverRef, tcp::socket& accepted);
-      void start();
-      void send(const std::vector<ubyte_8>& msg);
-      void send(const std::string& msg);
+      NetStream(SN::IOContextController context, tcp::socket& socket);
+      NetStream(SN::IOContextController context);
+   
+      void send(const std::vector<uint8_t> msg);
+      void startRead();
+      void startWrite();
+      void stopRead();
+      void stopWrite();
       void disconnect();
 
-      asio::io_context& getContext();
-      StreamedNetServer& getServer();
-      tcp::socket& getSocket();
-      ubyte_8 getState();
-
-      std::atomic<ubyte_8> state = State::Offline;
-      friend class StreamedNetServer;
-      friend class SNImpl::Server;
+      void doRead();
+      void doWrite();
+      void doTick();
+      ~NetStream();
 
    protected:
-      virtual void onConnect() {}
-      virtual void onStart() {}
+      virtual void abort();
+
+      virtual void onRead() {}
+      virtual void onWrite() {}
       virtual void onDisconnect() {}
-      virtual void onReceive(const std::vector<ubyte_8>& data) {}
+      virtual void onTick() {}
+
       virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
 
-      asio::io_context& context_;
-      asio::error_code ec;
+   public:
+      std::atomic<int> state = SNI_OFFLINE;
 
-   private:
-      void readData();
-      void connectionAbort();
+      SN::OWLock oWLock;
+
+      SN::IOContextController context;
       tcp::socket socket;
-      StreamedNetServer& server;
 
-      std::vector<ubyte_8> readBuffer;
-      std::vector<ubyte_8> writeBuffer;
+      std::vector<uint8_t> readBuffer;
+
+      SN::TSQueue<std::vector<uint8_t>> writeQ;
+      SN::TSQueue<uint8_t> readQ;
+
+      asio::error_code ec;
    };
 
-   class StreamedNetServer {
+
+   class Client : public NetStream {
    public:
-      enum State {
-         Offline = 0,
-         Online = FlagDef(1)
-      };
-      enum class Event {
-         OnStart,
-         Aborted
-      };
-      enum class Error {
-         AlreadyStarted,
-         AcceptFailed,
-         AcceptorAbortCancelFailed,
-         AcceptorAbortCloseFailed,
-         AbortShutdownFailed,
-         AbortCloseFailed,
-      };
+      Client(SN::IOContextController context);
+      Client();
 
-      StreamedNetServer(asio::io_context& context);
-      StreamedNetServer();
-      ~StreamedNetServer();
+      void resolve(const std::string& host, uint16_t port);
+      void addEndpoint(const std::string& host, uint16_t port);
+      void connect();
+      void disconnect();
 
-      StreamedNetServer(const StreamedNetServer&) = delete;
-      StreamedNetServer& operator=(const StreamedNetServer&) = delete;
+   protected:
+      virtual void abort() override;
 
-      StreamedNetServer(StreamedNetServer&& other) noexcept;
-      StreamedNetServer& operator=(StreamedNetServer&& other) noexcept;
+      virtual void onResolve() {}
+      virtual void onConnect() {}
 
-      void start(ushort_16 port);
+      virtual void onRead() override {}
+      virtual void onWrite() override {}
+      virtual void onDisconnect() override {}
+      virtual void onTick() override {}
+
+      virtual void onEvent(Event evt) override;
+      virtual void onError(Error err, const asio::error_code& ec) override;
+
+      tcp::resolver resolver;
+
+      std::vector<tcp::endpoint> endpoints;
+
+   public:
+      static void printClient(std::string&& clientStr, const std::string& ip = "localhost", uint16_t port = 0, bool wPort = false);
+   };
+
+   class Connection : public NetStream {
+   public:
+      Connection(SN::IOContextController context, Server& serverRef, tcp::socket& accepted);
+      void start();
+      void disconnect();
+
+      Server& getServer();
+
+   protected:
+      virtual void abort() override;
+
+      virtual void onConnect() {}
+      virtual void onStart() {}
+
+      virtual void onRead() override {}
+      virtual void onWrite() override {}
+      virtual void onDisconnect() override {}
+      virtual void onTick() override {}
+
+      virtual void onEvent(Event evt) override;
+      virtual void onError(Error err, const asio::error_code& ec) override;
+
+      Server& server;
+      friend class Server;
+   };
+
+
+   class Server {
+   public:
+      Server(SN::IOContextController context);
+      Server();
+
+      void start(uint16_t port);
+      void startAccept();
+      void stopAccept();
       void close();
-      void startThread();
-      void joinThread();
-      void stopContext();
 
       asio::io_context& getContext();
-      ushort_16 getPort();
-      std::vector<std::shared_ptr<SN::StreamedNetConnection>> getConnections();
+      uint16_t getPort();
+      std::vector<std::shared_ptr<Connection>>& getConnections();
 
-      static void printServer(std::string&& serverStr, ushort_16 port = 0, bool wPort = false);
-      friend class SNImpl::Server;
-      friend class SN::StreamedNetConnection;
+      void abort();
+      void doAccept();
+      void doTick();
+      void removeConnection(Connection* connectionPtr);
+      ~Server();
 
-   protected:
-      virtual void onStart() {}
-      virtual void onAbort() {}
-      virtual std::shared_ptr<StreamedNetConnection> onAccept(tcp::socket& socket);
-      virtual void onDisconnect(std::shared_ptr<StreamedNetConnection> connection) {}
-      virtual void onEvent(Event evt) {}
+      virtual std::shared_ptr<Connection> onAccept(tcp::socket& socket);
+      virtual void onTick() {}
+      virtual void onStart() { startAccept(); }
+      virtual void onDisconnect(std::shared_ptr<Connection> connection) {}
+
+      virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
 
-   private:
-      SNImpl::Server& getImpl();
+      static void printServer(std::string&& serverStr, uint16_t port = 0, bool wPort = false);
 
-   protected:
-      std::thread thr;
+   public:
+      std::atomic<int> state = SNI_OFFLINE;
 
-   private:
-      std::unique_ptr<asio::io_context> contextPtr_;
+      SN::OWLock oWLock;
 
-   protected:
-      asio::io_context* context_;
-   private:
-      std::shared_ptr<SNImpl::Server> serverPtr;
+      SN::IOContextController context;
+      asio::error_code ec;
+      std::optional<tcp::acceptor> acceptor;
+      std::optional<tcp::socket> pendingSocket;
+      std::vector<std::shared_ptr<Connection>> connections;
+      uint16_t port = 0;
+
+      friend class SN::Connection;
    };
 }
 
-#endif //NETWORK_STREAMED_NET_H
+#endif //~NCORE_STREAMED_NET_H

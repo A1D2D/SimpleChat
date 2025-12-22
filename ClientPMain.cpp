@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "SRC/Networking_New/StreamedNet.h"
+#include "SRC/Networking/PacketNet.h"
 #include "SRC/Util/StringUtil.h"
 
 enum ClientCommand {
@@ -14,9 +14,9 @@ enum ClientCommand {
    CC_Test_F
 };
 
-class SimpleChatClient : public SNImpl::Client {
+class SimpleChatClient : public SN::Client {
 public:
-   using SNImpl::Client::Client;
+   using SN::Client::Client;
 
 protected:
    void onResolve() override {
@@ -55,7 +55,7 @@ int main(int argc, const char** argv) {
    };
 
    // Colorb::SKY_BLUE.printAnsiStyle();
-   std::cout << "SimpleChat: Dev Client\n";
+   std::cout << "SimpleChat: Packeted Client\n";
    // resetAnsiStyle();
 
    asio::io_context context;
@@ -92,7 +92,7 @@ int main(int argc, const char** argv) {
                continue;
             }
 
-            SNImpl::Client::printClient("Connecting to Server..", *ip, *port, true);
+            SN::Client::printClient("Connecting to Server..", *ip, *port, true);
             client.resolve(*ip, *port);
             break;
          }
@@ -101,7 +101,7 @@ int main(int argc, const char** argv) {
             break;
          }
          default: {
-            SNImpl::Client::printClient(""+msg);
+            SN::Client::printClient(""+msg);
             client.send(StringUtil::stringToBytes(msg));
             break;
          }

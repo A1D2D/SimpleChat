@@ -1,63 +1,64 @@
 #include <iostream>
 
-#include <VORTEX_MP/NestedLoops>
+#include "SRC/Util/NestedLoops.h"
 
 #include "SRC/Util/StringUtil.h"
-#include "SRC/Networking/PacketNet.h"
+#include "SRC/Networking/StreamedNet.h"
+#include "asio/io_context.hpp"
 
 enum ServerCommand {
    SC_StartServer,
    SC_StopServer,
    SC_Exit,
-   SC_Message
+   SC_Message,
+   SC_ReqClientCount
 };
 
-class SimpleChatConnection : public PN::PacketNetConnection<> {
+class SimpleChatConnection : public SN::Connection {
 public:
-   using PN::PacketNetConnection<>::PacketNetConnection;
+   using SN::Connection::Connection;
+
 protected:
-   void onPacket(const PN::DefaultPacket& data) override {
-      std::cout << "[Client]: " << StringUtil::bytesToString(data.data) << "\n";
-
-      std::string msg = StringUtil::bytesToString(data.data);
-
-      if(StringUtil::containsAny(msg, {"labda", "kacsa", "idk"})) {
-         disconnect();
-         return;
-      }
-
-      asio::post(getContext(), [&, data]() {
-         for (auto& connection : getServer().getConnections()) {
-            if (connection.get() == this) continue;
-            connection->sendPacket(data);
-         }
-      });
+   void onConnect() override {
+      std::cout << "connection recived\n";
    }
 
    void onStart() override {
-      sendHandshake();
+      std::cout << "connection started\n";
+      startRead();
    }
 
-   void onEvent(Event evt) override {}
+   void onRead() override {
+      std::cout << "Client: ";
+      while (!readQ.empty()) {
+         std::cout << readQ.front();
+         readQ.pop();
+      }
+      std::cout << "\n";
+   }
 };
 
-class SimpleChatServer : public PN::PacketNetServer<> {
+class SimpleChatServer : public SN::Server {
+public:
+   using SN::Server::Server;
+
 protected:
    void onStart() override {
       printServer("started", getPort(), true);
+      startAccept();
    }
 
-   std::shared_ptr<SN::StreamedNetConnection> onAccept(tcp::socket &socket) override {
-      printServer("client Accepted", getPort(), true);
-      return std::make_shared<SimpleChatConnection>(this->getContext(),*this, socket);
+   std::shared_ptr<SN::Connection> onAccept(tcp::socket& socket) override {
+      printServer("client Accepted");
+      return std::make_shared<SimpleChatConnection>(&this->getContext(), *this, socket);
    }
 
-   void onDisconnect(std::shared_ptr<PN::PacketNetConnection<>> connection) override {
+   void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
       printServer("client disconnected", getPort(), true);
    }
 };
 
-int main(int argc, const char** argv) {
+int main() {
    std::string msg;
    std::vector<std::string> args;
    std::string errorMsg;
@@ -69,22 +70,25 @@ int main(int argc, const char** argv) {
       {"/stop", SC_StopServer},
       {"/d", SC_StopServer},
       {"/e", SC_Exit},
-      {"/exit", SC_Exit}
+      {"/exit", SC_Exit},
+      {"/rcc", SC_ReqClientCount}
    };
 
-   Colorb::BRONZE.printAnsiStyle();
-   std::cout << "SimpleChat\n";
-   resetAnsiStyle();
+   // Colorb::BRONZE.printAnsiStyle();
+   std::cout << "SimpleChat: Server\n";
+   // resetAnsiStyle();
 
-   SimpleChatServer server;
+   asio::io_context context;
+   SimpleChatServer server(context);
+   server.context.startThread();
 
-   NestedLoop nl;
+   SN::NestedLoop nl;
    for (;;) {
       std::getline(std::cin, msg);
       args = StringUtil::split(msg, " ");
       if(args.empty()) continue;
       std::string cmdStr = args[0];
-      std::shift_left(args.begin(), args.end(), 1);
+      shift_left(args.begin(), args.end(), 1);
 
       auto it = commands.find(cmdStr);
       if (it == commands.end()) {
@@ -100,26 +104,32 @@ int main(int argc, const char** argv) {
             NL_BREAK(nl, 0);
          }
          case SC_StartServer: {
-            auto port = StringUtil::parseArg<ushort_16>(args, 0);
+            auto port = StringUtil::parseArg<uint16_t>(args, 0);
             if(!port) {
                std::cerr << "incorrect arg usage\n";
                continue;
             }
 
             server.start(*port);
-            SN::StreamedNetServer::printServer("Server Created..", server.getPort(), true);
+            SimpleChatServer::printServer("Server Created..", server.getPort(), true);
             break;
          }
          case SC_StopServer: {
             server.close();
-            SN::StreamedNetServer::printServer("server closed");
+            SimpleChatServer::printServer("server closed");
+            break;
+         }
+         case SC_ReqClientCount: {
+            asio::post(server.getContext(), [&, msg]() {
+               std::cout << "client connections stored: " << server.getConnections().size() << "\n";
+            });
             break;
          }
          default: {
-            SN::StreamedNetServer::printServer(""+msg);
+            SimpleChatServer::printServer(""+msg);
             asio::post(server.getContext(), [&, msg]() {
                for(auto& connection : server.getConnections()) {
-                  connection->sendPacket(StringUtil::stringToBytes(msg));
+                  connection->send(StringUtil::stringToBytes(msg));
                }
             });
             break;
@@ -127,5 +137,8 @@ int main(int argc, const char** argv) {
       }
       NL_CHECK(nl, 0);
    }
+
+   server.context.stopThread();
+   std::cout << "skipped" << std::endl;
    return 0;
 }

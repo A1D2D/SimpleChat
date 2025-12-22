@@ -3,7 +3,7 @@
 #include "SRC/Util/NestedLoops.h"
 
 #include "SRC/Util/StringUtil.h"
-#include "SRC/Networking_New/StreamedNet.h"
+#include "SRC/Networking/PacketNet.h"
 #include "asio/io_context.hpp"
 
 enum ServerCommand {
@@ -14,9 +14,9 @@ enum ServerCommand {
    SC_ReqClientCount
 };
 
-class SimpleChatConnection : public SNImpl::Connection {
+class SimpleChatConnection : public SN::Connection {
 public:
-   using SNImpl::Connection::Connection;
+   using SN::Connection::Connection;
 
 protected:
    void onConnect() override {
@@ -38,9 +38,9 @@ protected:
    }
 };
 
-class SimpleChatServer : public SNImpl::Server {
+class SimpleChatServer : public SN::Server {
 public:
-   using SNImpl::Server::Server;
+   using SN::Server::Server;
 
 protected:
    void onStart() override {
@@ -48,12 +48,12 @@ protected:
       startAccept();
    }
 
-   std::shared_ptr<SNImpl::Connection> onAccept(tcp::socket& socket) override {
+   std::shared_ptr<SN::Connection> onAccept(tcp::socket& socket) override {
       printServer("client Accepted");
       return std::make_shared<SimpleChatConnection>(&this->getContext(), *this, socket);
    }
 
-   void onDisconnect(std::shared_ptr<SNImpl::Connection> connection) override {
+   void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
       printServer("client disconnected", getPort(), true);
    }
 };
@@ -75,7 +75,7 @@ int main() {
    };
 
    // Colorb::BRONZE.printAnsiStyle();
-   std::cout << "SimpleChat: Dev Server\n";
+   std::cout << "SimpleChat: Packeted Server\n";
    // resetAnsiStyle();
 
    asio::io_context context;

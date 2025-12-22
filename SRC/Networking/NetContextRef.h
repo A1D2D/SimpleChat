@@ -1,5 +1,5 @@
-#ifndef NETWORK_NET_IOCONTEXT_CONTROLLER_H
-#define NETWORK_NET_IOCONTEXT_CONTROLLER_H
+#ifndef NCORE_IOCONTEXT_CONTROLLER_H
+#define NCORE_IOCONTEXT_CONTROLLER_H
 
 #include <thread>
 #include <memory>
@@ -75,4 +75,4 @@ namespace SN {
       bool threadRunning = false;
    };
 }
-#endif//~NETWORK_NET_IOCONTEXT_CONTROLLER_H
+#endif //~NCORE_IOCONTEXT_CONTROLLER_H

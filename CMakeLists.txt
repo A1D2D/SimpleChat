@@ -41,14 +41,6 @@ if(CMAKE_STRICT_STANDARD)
 endif()
 
 #fetchExternals
-# === VORTEX_MP ===
-# FetchContent_Declare(
-#    VORTEX_MP
-#    GIT_REPOSITORY https://github.com/A1D2D/VortexMP.git
-#    GIT_TAG master
-#    GIT_SHALLOW TRUE
-# )
-# FetchContent_MakeAvailable(VORTEX_MP)
 
 # === asio ===
 FetchContent_Declare(
@@ -58,8 +50,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(asio)
 
-set(EXTERNAL_INCLUDE_PATHS 
-   # ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTENT_FOLDER_NAME}/vortex_mp-src/Include
+set(EXTERNAL_INCLUDE_PATHS
    ${asio_SOURCE_DIR}/asio/include
 )
 
@@ -90,17 +81,20 @@ add_executable(Client
    ClientMain.cpp
    SRC/Networking/StreamedNet.cpp
 )
-add_executable(DevClient
-   ClientMainDev.cpp
-   SRC/Networking_New/StreamedNet.cpp
-)
+
 add_executable(Server
    ServerMain.cpp
    SRC/Networking/StreamedNet.cpp
 )
-add_executable(DevServer
-   ServerMainDev.cpp
-   SRC/Networking_New/StreamedNet.cpp
+
+add_executable(ClientPacket
+   ClientPMain.cpp
+   SRC/Networking/StreamedNet.cpp
+)
+
+add_executable(ServerPacket
+   ServerPMain.cpp
+   SRC/Networking/StreamedNet.cpp
 )
 
 if(WIN32)
@@ -110,21 +104,22 @@ if(WIN32)
    )
    target_compile_definitions(Client PRIVATE ASIO_STANDALONE)
 
-   target_link_libraries(DevClient PRIVATE
-      ws2_32
-      mswsock
-   )
-   target_compile_definitions(DevClient PRIVATE ASIO_STANDALONE)
-
    target_link_libraries(Server PRIVATE 
       ws2_32
       mswsock
    )
    target_compile_definitions(Server PRIVATE ASIO_STANDALONE)
 
-   target_link_libraries(DevServer PRIVATE 
+
+   target_link_libraries(ClientPacket PRIVATE
       ws2_32
       mswsock
    )
-   target_compile_definitions(DevServer PRIVATE ASIO_STANDALONE)
+   target_compile_definitions(ClientPacket PRIVATE ASIO_STANDALONE)
+
+   target_link_libraries(ServerPacket PRIVATE 
+      ws2_32
+      mswsock
+   )
+   target_compile_definitions(ServerPacket PRIVATE ASIO_STANDALONE)
 endif()

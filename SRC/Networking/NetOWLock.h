@@ -1,5 +1,5 @@
-#ifndef NETWORK_NET_ONE_WAY_LOCK_TEMPLATED_H
-#define NETWORK_NET_ONE_WAY_LOCK_TEMPLATED_H
+#ifndef NCORE_ONE_WAY_LOCK_TEMPLATED_H
+#define NCORE_ONE_WAY_LOCK_TEMPLATED_H
 
 #include <atomic>
 #include <thread>
@@ -87,4 +87,4 @@ namespace SN {
    };
 }
 
-#endif //~NETWORK_NET_ONE_WAY_LOCK_TEMPLATED_H
+#endif //~NCORE_ONE_WAY_LOCK_TEMPLATED_H
