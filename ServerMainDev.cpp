@@ -1,15 +1,17 @@
 #include <iostream>
 
-#include <VORTEX_MP/NestedLoops>
+#include "SRC/Util/NestedLoops.h"
 
 #include "SRC/Util/StringUtil.h"
 #include "SRC/Networking_New/StreamedNet.h"
+#include "asio/io_context.hpp"
 
 enum ServerCommand {
    SC_StartServer,
    SC_StopServer,
    SC_Exit,
-   SC_Message
+   SC_Message,
+   SC_ReqClientCount
 };
 
 class SimpleChatConnection : public SNImpl::Connection {
@@ -48,7 +50,7 @@ protected:
 
    std::shared_ptr<SNImpl::Connection> onAccept(tcp::socket& socket) override {
       printServer("client Accepted");
-      return std::make_shared<SimpleChatConnection>(this->getContext(), *this, socket);
+      return std::make_shared<SimpleChatConnection>(&this->getContext(), *this, socket);
    }
 
    void onDisconnect(std::shared_ptr<SNImpl::Connection> connection) override {
@@ -56,7 +58,7 @@ protected:
    }
 };
 
-int main(int argc, const char** argv) {
+int main() {
    std::string msg;
    std::vector<std::string> args;
    std::string errorMsg;
@@ -68,29 +70,25 @@ int main(int argc, const char** argv) {
       {"/stop", SC_StopServer},
       {"/d", SC_StopServer},
       {"/e", SC_Exit},
-      {"/exit", SC_Exit}
+      {"/exit", SC_Exit},
+      {"/rcc", SC_ReqClientCount}
    };
 
-   Colorb::BRONZE.printAnsiStyle();
-   std::cout << "SimpleChat\n";
-   resetAnsiStyle();
+   // Colorb::BRONZE.printAnsiStyle();
+   std::cout << "SimpleChat: Dev Server\n";
+   // resetAnsiStyle();
 
-   
-   std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
-   std::thread contextThread;
-
+   asio::io_context context;
    SimpleChatServer server(context);
-   contextThread = std::thread([context]() {
-      context->run();
-   });
+   server.context.startThread();
 
-   NestedLoop nl;
+   SN::NestedLoop nl;
    for (;;) {
       std::getline(std::cin, msg);
       args = StringUtil::split(msg, " ");
       if(args.empty()) continue;
       std::string cmdStr = args[0];
-      std::shift_left(args.begin(), args.end(), 1);
+      shift_left(args.begin(), args.end(), 1);
 
       auto it = commands.find(cmdStr);
       if (it == commands.end()) {
@@ -106,7 +104,7 @@ int main(int argc, const char** argv) {
             NL_BREAK(nl, 0);
          }
          case SC_StartServer: {
-            auto port = StringUtil::parseArg<ushort_16>(args, 0);
+            auto port = StringUtil::parseArg<uint16_t>(args, 0);
             if(!port) {
                std::cerr << "incorrect arg usage\n";
                continue;
@@ -121,9 +119,15 @@ int main(int argc, const char** argv) {
             SimpleChatServer::printServer("server closed");
             break;
          }
+         case SC_ReqClientCount: {
+            asio::post(server.getContext(), [&, msg]() {
+               std::cout << "client connections stored: " << server.getConnections().size() << "\n";
+            });
+            break;
+         }
          default: {
             SimpleChatServer::printServer(""+msg);
-            asio::post(*server.getContext(), [&, msg]() {
+            asio::post(server.getContext(), [&, msg]() {
                for(auto& connection : server.getConnections()) {
                   connection->send(StringUtil::stringToBytes(msg));
                }
@@ -134,8 +138,7 @@ int main(int argc, const char** argv) {
       NL_CHECK(nl, 0);
    }
 
-   if(contextThread.joinable()) contextThread.join();
+   server.context.stopThread();
    std::cout << "skipped" << std::endl;
-
    return 0;
 }

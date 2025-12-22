@@ -1,7 +1,7 @@
 #ifndef PORTBRIDGE_STRINGUTIL_H
 #define PORTBRIDGE_STRINGUTIL_H
 
-#include <VORTEX_MP/LinearAlg>
+// #include <VORTEX_MP/LinearAlg>
 
 #include <charconv>
 #include <optional>
@@ -136,11 +136,11 @@ namespace StringUtil {
       return output;
    }
 
-   static std::vector<ubyte_8> stringToBytes(const std::string& str) {
-      return std::vector<ubyte_8>(str.begin(), str.end());
+   static std::vector<uint8_t> stringToBytes(const std::string& str) {
+      return std::vector<uint8_t>(str.begin(), str.end());
    }
 
-   static std::string bytesToString(const std::vector<ubyte_8>& bytes) {
+   static std::string bytesToString(const std::vector<uint8_t>& bytes) {
       return std::string(bytes.begin(), bytes.end());
    }
 

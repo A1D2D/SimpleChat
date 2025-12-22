@@ -10,21 +10,17 @@ namespace SN {
       OWLock() : counter(0), destroying(false) {}
 
       bool try_acquire() noexcept {
-         // Fast path: reentrant acquisition
          if (tl_recursion_count > 0) {
             ++tl_recursion_count;
             return true;
          }
 
-         // Check if destruction started
          if (destroying.load(std::memory_order_acquire)) {
             return false;
          }
 
-         // Increment counter
          counter.fetch_add(1, std::memory_order_acquire);
 
-         // Double-check destruction didn't start
          if (destroying.load(std::memory_order_acquire)) {
             counter.fetch_sub(1, std::memory_order_release);
             return false;
@@ -48,7 +44,7 @@ namespace SN {
       void begin_destroy_and_wait() noexcept {
          destroying.store(true, std::memory_order_release);
          
-         while (counter.load(std::memory_order_acquire) > 0) {
+         while (counter.load(std::memory_order_acquire) > tl_recursion_count) {
             std::this_thread::yield();
          }
       }
@@ -59,7 +55,7 @@ namespace SN {
    private:
       std::atomic<unsigned int> counter;
       std::atomic<bool> destroying;
-      static thread_local unsigned int tl_recursion_count;
+      inline static thread_local unsigned int tl_recursion_count = 0;
    };
 
    class OWLockGuard {
@@ -74,7 +70,6 @@ namespace SN {
          }
       }
 
-      // Check if acquisition succeeded
       explicit operator bool() const noexcept {
          return acquired_;
       }
@@ -83,7 +78,6 @@ namespace SN {
          return acquired_;
       }
 
-      // Non-copyable, non-movable
       OWLockGuard(const OWLockGuard&) = delete;
       OWLockGuard& operator=(const OWLockGuard&) = delete;
 

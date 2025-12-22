@@ -1,4 +1,4 @@
-#include <VORTEX_MP/NestedLoops>
+#include "SRC/Util/NestedLoops.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -54,20 +54,15 @@ int main(int argc, const char** argv) {
       {"/exit", CC_Exit}
    };
 
-   Colorb::SKY_BLUE.printAnsiStyle();
-   std::cout << "SimpleChat\n";
-   resetAnsiStyle();
+   // Colorb::SKY_BLUE.printAnsiStyle();
+   std::cout << "SimpleChat: Dev Client\n";
+   // resetAnsiStyle();
 
-   NestedLoop nl;
-
-   std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
-   std::thread contextThread;
-
+   asio::io_context context;
    SimpleChatClient client(context);
-   contextThread = std::thread([context]() {
-      context->run();
-   });
+   client.context.startThread();
 
+   SN::NestedLoop nl;
    for (;;) {
       std::getline(std::cin, msg);
       args = StringUtil::split(msg, " ");
@@ -91,7 +86,7 @@ int main(int argc, const char** argv) {
          }
          case CC_Connect: {
             auto ip = StringUtil::parseArg<std::string>(args, 0);
-            auto port = StringUtil::parseArg<ushort_16>(args, 1);
+            auto port = StringUtil::parseArg<uint16_t>(args, 1);
             if(!port || !ip) {
                std::cerr << "incorrect arg usage\n";
                continue;
@@ -114,7 +109,6 @@ int main(int argc, const char** argv) {
       NL_CHECK(nl,0);
    }
 
-   if(contextThread.joinable()) contextThread.join();
-   std::cout << "skipped" << std::endl;
+   client.context.stopThread();
    return 0;
 }

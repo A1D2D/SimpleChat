@@ -12,8 +12,10 @@
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 
+#include "NetContextRef.h"
 #include "NetTSQueue.h"
 #include "NetOWLock.h"
+
 
 #define FlagDef(ID) (1LL << ((ID)-1))
 #define HasFlag(flags, flag) (((flags) & (flag)) != 0)
@@ -68,8 +70,8 @@ namespace SNImpl {
 
    class NetStream {
    public:
-      NetStream(std::shared_ptr<asio::io_context> context, tcp::socket& socket);
-      NetStream(std::shared_ptr<asio::io_context> context);
+      NetStream(SN::IOContextController context, tcp::socket& socket);
+      NetStream(SN::IOContextController context);
    
       void send(const std::vector<ubyte_8> msg);
       void startRead();
@@ -84,7 +86,7 @@ namespace SNImpl {
       ~NetStream();
 
    protected:
-      void abort();
+      virtual void abort();
 
       virtual void onRead() {}
       virtual void onWrite() {}
@@ -99,8 +101,8 @@ namespace SNImpl {
 
       SN::OWLock oWLock;
 
-      std::shared_ptr<asio::io_context> context_;
-      tcp::socket socket_;
+      SN::IOContextController context;
+      tcp::socket socket;
 
       std::vector<ubyte_8> readBuffer;
 
@@ -113,14 +115,16 @@ namespace SNImpl {
 
    class Client : public NetStream {
    public:
-      Client(std::shared_ptr<asio::io_context> context);
+      Client(SN::IOContextController context);
+      Client();
+
       void resolve(const std::string& host, ushort_16 port);
       void addEndpoint(const std::string& host, ushort_16 port);
       void connect();
       void disconnect();
 
    protected:
-      void abort();
+      virtual void abort() override;
 
       virtual void onResolve() {}
       virtual void onConnect() {}
@@ -143,14 +147,14 @@ namespace SNImpl {
 
    class Connection : public NetStream {
    public:
-      Connection(std::shared_ptr<asio::io_context> context, Server& serverRef, tcp::socket& accepted);
+      Connection(SN::IOContextController context, Server& serverRef, tcp::socket& accepted);
       void start();
       void disconnect();
 
       Server& getServer();
 
    protected:
-      void abort();
+      virtual void abort() override;
 
       virtual void onConnect() {}
       virtual void onStart() {}
@@ -170,14 +174,15 @@ namespace SNImpl {
 
    class Server {
    public:
-      Server(std::shared_ptr<asio::io_context> context);
+      Server(SN::IOContextController context);
+      Server();
 
       void start(ushort_16 port);
       void startAccept();
       void stopAccept();
       void close();
 
-      std::shared_ptr<asio::io_context> getContext();
+      asio::io_context& getContext();
       ushort_16 getPort();
       std::vector<std::shared_ptr<Connection>>& getConnections();
 
@@ -202,12 +207,12 @@ namespace SNImpl {
 
       SN::OWLock oWLock;
 
-      std::shared_ptr<asio::io_context> context_;
+      SN::IOContextController context;
       asio::error_code ec;
       std::optional<tcp::acceptor> acceptor;
       std::optional<tcp::socket> pendingSocket;
       std::vector<std::shared_ptr<Connection>> connections;
-      ushort_16 port_ = 0;
+      ushort_16 port = 0;
 
       friend class SNImpl::Connection;
    };

@@ -4,7 +4,6 @@ project(SimpleChat)
 include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # === FETCH_CONTENT ===
 set(LIB_FOLDER_NAME Libraries)
@@ -19,15 +18,37 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/Run)
 set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTENT_FOLDER_NAME})
 set(BUILD_STATIC_EXECUTEABLE OFF)
 
+set(CMAKE_STRICT_STANDARD ON)
+
+#preConfig
+if(CMAKE_STRICT_STANDARD)
+   set(CMAKE_CXX_STANDARD_REQUIRED ON)
+   set(CMAKE_CXX_EXTENSIONS OFF)
+   if (MSVC)
+      # Strict ISO mode for MSVC
+      add_compile_options(
+         /permissive-
+         /W3
+      )
+   else()
+      # Strict ISO mode for GCC & Clang
+      add_compile_options(
+         -std=c++20
+         -pedantic-errors
+         # -Wall
+      )
+   endif()
+endif()
+
 #fetchExternals
 # === VORTEX_MP ===
-FetchContent_Declare(
-   VORTEX_MP
-   GIT_REPOSITORY https://github.com/A1D2D/VortexMP.git
-   GIT_TAG master
-   GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(VORTEX_MP)
+# FetchContent_Declare(
+#    VORTEX_MP
+#    GIT_REPOSITORY https://github.com/A1D2D/VortexMP.git
+#    GIT_TAG master
+#    GIT_SHALLOW TRUE
+# )
+# FetchContent_MakeAvailable(VORTEX_MP)
 
 # === asio ===
 FetchContent_Declare(
@@ -38,13 +59,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(asio)
 
 set(EXTERNAL_INCLUDE_PATHS 
-   ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTENT_FOLDER_NAME}/vortex_mp-src/Include
+   # ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTENT_FOLDER_NAME}/vortex_mp-src/Include
    ${asio_SOURCE_DIR}/asio/include
 )
 
 #vcpkg:
 # find_package(lib CONFIG REQUIRED)
-
 
 # static build
 if(BUILD_STATIC_EXECUTEABLE MATCHES ON) 
