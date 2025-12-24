@@ -78,7 +78,7 @@ int main() {
    std::cout << "SimpleChat: Server\n";
    // resetAnsiStyle();
 
-   asio::io_context context;
+   std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
    SimpleChatServer server(context);
    server.context.startThread();
 

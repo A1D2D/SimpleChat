@@ -15,11 +15,12 @@ SN::NetStream::NetStream(SN::IOContextController context_) :
 void SN::NetStream::startRead() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
+
    if(HasFlag(state, SNI_IN_READ)) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       doRead();
    });
@@ -28,12 +29,12 @@ void SN::NetStream::startRead() {
 void SN::NetStream::startWrite() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
+
    if(HasFlag(state, SNI_IN_WRITE)) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
-
+      SN::OWLockRelease release(oWLock);
       doWrite();
    });
 }
@@ -61,9 +62,10 @@ void SN::NetStream::disconnect() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
+
       abort();
    });
 }
@@ -72,9 +74,9 @@ void SN::NetStream::doRead() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    auto readLambda = [this](std::error_code ec, std::size_t length) {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       if(ec) {
          std::cout << "writeError: " << ec.message() << "\n";
@@ -110,9 +112,9 @@ void SN::NetStream::doWrite() {
       return;
    }
 
+   if(!oWLock.try_acquire()) return;
    auto writeLambda = [this](std::error_code ec, std::size_t length) {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       if(ec) {
          std::cout << "writeError: " << ec.message() << "\n";
@@ -141,9 +143,9 @@ void SN::NetStream::doTick() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       doTick();
       onTick();
@@ -173,6 +175,7 @@ void SN::NetStream::abort() {
 
 SN::NetStream::~NetStream() {
    oWLock.begin_destroy_and_wait();
+   printf("destroyed");
 }
 
 void SN::NetStream::onEvent(Event evt) {
@@ -259,16 +262,15 @@ SN::Client::Client() : NetStream(SN::IOContextController()), resolver(*context) 
 
 SN::Client::Client(SN::IOContextController context_) : NetStream(std::move(context_)), resolver(*context) {}
 
-
 void SN::Client::resolve(const std::string& host, uint16_t port) {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
 
+   if(!oWLock.try_acquire()) return;
    auto resolveLambda = [this](const std::error_code& ec, tcp::resolver::results_type resultEndpoints) {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       RemoveFlag(state, SNI_RESOLVEING);
       if(ec) {
@@ -277,7 +279,7 @@ void SN::Client::resolve(const std::string& host, uint16_t port) {
          endpoints.clear();
          for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it)
             endpoints.push_back(it->endpoint());
-         onResolve();
+         onResolve();//TODO: potential guard pass needed
       }
    };
 
@@ -305,17 +307,18 @@ void SN::Client::connect() {
    if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_CONNECTING)) return;
    if(endpoints.empty()) return;
 
+   if(!oWLock.try_acquire()) return;
    auto connectLambda = [this](const std::error_code& ec, const tcp::endpoint& connectedEndpoint) {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
-      
+      SN::OWLockRelease release(oWLock);
+
       RemoveFlag(state, SNI_CONNECTING);
+
       if(ec) {
          std::cout << "Connection failed\n";
          return;
       } else {
          AddFlag(state, SNI_ONLINE);
-         onConnect();
+         onConnect(); //TODO: Potential guard pass needed
       }
    };
 
@@ -327,9 +330,10 @@ void SN::Client::disconnect() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
+
       abort();
    });
 }
@@ -442,9 +446,10 @@ void SN::Connection::disconnect() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
+
       abort();
    });
 }
@@ -539,7 +544,6 @@ void SN::Connection::onError(Error err, const asio::error_code& ec) {
 }
 
 
-
 /*---------------------------SERVER---------------------------*/
 SN::Server::Server() : context(SN::IOContextController()) {
    doTick();
@@ -567,9 +571,9 @@ void SN::Server::startAccept() {
    if(!guard) return;
    if(HasFlag(state, SNI_IN_ACCEPT)) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       doAccept();
    });
@@ -586,9 +590,10 @@ void SN::Server::close() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
+
       abort();
    });
 }
@@ -605,10 +610,10 @@ void SN::Server::doAccept() {
 
    pendingSocket.emplace(*context);
 
+   if(!oWLock.try_acquire()) return;
    auto acceptLambda = [&](const asio::error_code& errorCode) {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
-      
+      SN::OWLockRelease release(oWLock);
+
       ec = errorCode;
       if(ec) {
          abort();
@@ -628,9 +633,9 @@ void SN::Server::doTick() {
    SN::OWLockGuard guard(oWLock);
    if(!guard) return;
 
+   if(!oWLock.try_acquire()) return;
    asio::post(*context, [this]() {
-      SN::OWLockGuard guard(oWLock);
-      if(!guard) return;
+      SN::OWLockRelease release(oWLock);
 
       doTick();
       onTick();
@@ -638,7 +643,13 @@ void SN::Server::doTick() {
 }
 
 void SN::Server::removeConnection(Connection* connectionPtr) {
-   auto removeLambda = [connectionPtr](const std::shared_ptr<Connection>& conn) -> bool {
+   SN::OWLockGuard guard(oWLock);
+   if(!guard) return;
+
+   if(!oWLock.try_acquire()) return;
+   auto removeLambda = [this, connectionPtr](const std::shared_ptr<Connection>& conn) -> bool {
+      SN::OWLockRelease release(oWLock);
+
       return conn.get() == connectionPtr;
    };
 

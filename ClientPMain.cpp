@@ -14,9 +14,9 @@ enum ClientCommand {
    CC_Test_F
 };
 
-class SimpleChatClient : public SN::Client {
+class SimpleChatClient : public PN::Client<> {
 public:
-   using SN::Client::Client;
+   using PN::Client<>::Client;
 
 protected:
    void onResolve() override {
@@ -26,16 +26,12 @@ protected:
 
    void onConnect() override {
       std::cout << "connect succesfull\n";
+      sendHandshake();
       startRead();
    }
    
-   void onRead() override {
-      std::cout << "Server: ";
-      while (!readQ.empty()) {
-         std::cout << readQ.front();
-         readQ.pop();
-      }
-      std::cout << "\n";
+   void onPacket(const PN::DefaultPacket& data) override {
+      std::cout << "[Server]: " << StringUtil::bytesToString(data.data) << std::endl;
    }
 };
 
@@ -102,7 +98,7 @@ int main(int argc, const char** argv) {
          }
          default: {
             SN::Client::printClient(""+msg);
-            client.send(StringUtil::stringToBytes(msg));
+            client.sendPacket(StringUtil::stringToBytes(msg));
             break;
          }
       }
@@ -110,5 +106,6 @@ int main(int argc, const char** argv) {
    }
 
    client.context.stopThread();
+   std::cout << "skipped" << std::endl;
    return 0;
 }

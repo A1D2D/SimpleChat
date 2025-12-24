@@ -64,26 +64,69 @@ namespace SN {
          acquired_ = lock_->try_acquire();
       }
 
+      OWLockGuard(OWLockGuard&& other) noexcept : lock_(other.lock_), acquired_(other.acquired_) {
+         other.lock_ = nullptr;
+         other.acquired_ = false;
+      }
+
       ~OWLockGuard() {
          if (acquired_) {
             lock_->release();
          }
       }
 
-      explicit operator bool() const noexcept {
-         return acquired_;
+      OWLockGuard& operator=(OWLockGuard&& other) noexcept {
+         if (this != &other) {
+            if (acquired_) {
+               lock_->release();
+            }
+
+            lock_ = other.lock_;
+            acquired_ = other.acquired_;
+
+            other.lock_ = nullptr;
+            other.acquired_ = false;
+         }
+         return *this;
       }
 
-      bool acquired() const noexcept {
-         return acquired_;
-      }
+      explicit operator bool() const noexcept { return acquired_; }
+      bool acquired() const noexcept { return acquired_; }
 
       OWLockGuard(const OWLockGuard&) = delete;
-      OWLockGuard& operator=(const OWLockGuard&) = delete;
 
    private:
-      OWLock* lock_;
-      bool acquired_;
+      OWLock* lock_ = nullptr;
+      bool acquired_ = false;
+   };
+
+   class OWLockRelease {
+   public:
+      explicit OWLockRelease(OWLock& lock) : lock_(&lock) {}
+
+      OWLockRelease(OWLockRelease&& other) noexcept : lock_(other.lock_) {
+         other.lock_ = nullptr;
+      }
+
+      ~OWLockRelease() {
+         lock_->release();
+      }
+
+      OWLockRelease& operator=(OWLockRelease&& other) noexcept {
+         if (this != &other) {
+            lock_->release();
+
+            lock_ = other.lock_;
+
+            other.lock_ = nullptr;
+         }
+         return *this;
+      }
+
+      OWLockRelease(const OWLockRelease&) = delete;
+
+   private:
+      OWLock* lock_ = nullptr;
    };
 }
 

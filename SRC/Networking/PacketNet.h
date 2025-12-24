@@ -13,9 +13,9 @@
    bool deserialize(const std::vector<uint8_t>& buf, size_t& offset) override { return PN::deserializeFields(buf, offset, __VA_ARGS__); }
 
 namespace PN {
-   struct PacketNetPacket {
-      PacketNetPacket() = default;
-      virtual ~PacketNetPacket() = default;
+   struct Packet {
+      Packet() = default;
+      virtual ~Packet() = default;
       virtual bool deserializeHead(std::vector<uint8_t>& incoming) = 0;
       virtual bool checkHead() = 0;
       
@@ -28,7 +28,7 @@ namespace PN {
       virtual std::vector<uint8_t> serialize() const = 0;
    };
 
-   struct DefaultPacket : PacketNetPacket {
+   struct DefaultPacket : Packet {
       constexpr static const std::string_view headSpecifier = "PN_PACKET";
       constexpr static const std::string_view endSpecifier = "<~PN>";
       constexpr static const uint64_t maxPacketSize = 64*1024*1024;
@@ -221,12 +221,12 @@ namespace PN {
       return deserializeFields(buf, offset, rest...);
    }
    
-   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<PacketNetPacket, T> && std::is_base_of_v<PacketNetPacket, U>>>
-   class PacketNetServer;
+   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<Packet, T> && std::is_base_of_v<Packet, U>>>
+   class Server;
 
 
-   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<PacketNetPacket, T> && std::is_base_of_v<PacketNetPacket, U>>>
-   class PacketNetClient : public SN::Client {
+   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<Packet, T> && std::is_base_of_v<Packet, U>>>
+   class Client : public SN::Client {
    public:
       using SN::Client::Client;
 
@@ -301,15 +301,15 @@ namespace PN {
    };
 
 
-   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<PacketNetPacket, T> && std::is_base_of_v<PacketNetPacket, U>>>
-   class PacketNetConnection : public SN::Connection {
+   template <typename T = DefaultPacket, typename U = T, typename = std::enable_if_t<std::is_base_of_v<Packet, T> && std::is_base_of_v<Packet, U>>>
+   class Connection : public SN::Connection {
    public:
       using SN::Connection::Connection;
 
-      PacketNetConnection(asio::io_context& context, PacketNetServer<T, U>& serverRef, tcp::socket& accepted) : SN::Connection(context, serverRef, accepted) {}
+      Connection(asio::io_context& context, Server<T, U>& serverRef, tcp::socket& accepted) : SN::Connection(context, serverRef, accepted) {}
 
-      PacketNetServer<T, U>& getServer() {
-         return static_cast<PacketNetServer<T, U>&>(Connection::getServer());
+      Server<T, U>& getServer() {
+         return static_cast<Server<T, U>&>(SN::Connection::getServer());
       }
 
       void sendHandshake() {
@@ -384,24 +384,24 @@ namespace PN {
 
 
    template <typename T, typename U, typename>
-   class PacketNetServer : public SN::Server {
+   class Server : public SN::Server {
    public:
       using SN::Server::Server;
 
-      std::vector<std::shared_ptr<PacketNetConnection<T, U>>> getConnections() {
-         std::vector<std::shared_ptr<PacketNetConnection<T, U>>> out;
+      std::vector<std::shared_ptr<Connection<T, U>>> getConnections() {
+         std::vector<std::shared_ptr<Connection<T, U>>> out;
          for (auto& conn : SN::Server::getConnections()) {
-            out.emplace_back(std::static_pointer_cast<PacketNetConnection<T, U>>(conn));
+            out.emplace_back(std::static_pointer_cast<Connection<T, U>>(conn));
          }
          return out;
       }
 
       void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
-         auto derivedConn = std::static_pointer_cast<PN::PacketNetConnection<T, U>>(connection);
+         auto derivedConn = std::static_pointer_cast<PN::Connection<T, U>>(connection);
          onDisconnect(derivedConn);
       }
 
-      virtual void onDisconnect(std::shared_ptr<PN::PacketNetConnection<T, U>> connection) {}
+      virtual void onDisconnect(std::shared_ptr<PN::Connection<T, U>> connection) {}
    };
 }
 

@@ -1,5 +1,6 @@
 #include "SRC/Util/NestedLoops.h"
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -58,7 +59,7 @@ int main(int argc, const char** argv) {
    std::cout << "SimpleChat: Client\n";
    // resetAnsiStyle();
 
-   asio::io_context context;
+   std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
    SimpleChatClient client(context);
    client.context.startThread();
 
@@ -110,5 +111,6 @@ int main(int argc, const char** argv) {
    }
 
    client.context.stopThread();
+   std::cout << "skipped" << std::endl;
    return 0;
 }

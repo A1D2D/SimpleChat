@@ -14,9 +14,9 @@ enum ServerCommand {
    SC_ReqClientCount
 };
 
-class SimpleChatConnection : public SN::Connection {
+class SimpleChatConnection : public PN::Connection<> {
 public:
-   using SN::Connection::Connection;
+   using PN::Connection<>::Connection;
 
 protected:
    void onConnect() override {
@@ -25,22 +25,32 @@ protected:
 
    void onStart() override {
       std::cout << "connection started\n";
+      sendHandshake();
       startRead();
    }
 
-   void onRead() override {
-      std::cout << "Client: ";
-      while (!readQ.empty()) {
-         std::cout << readQ.front();
-         readQ.pop();
+   void onPacket(const PN::DefaultPacket& data) override {
+      std::cout << "[Client]: " << StringUtil::bytesToString(data.data) << "\n";
+
+      std::string msg = StringUtil::bytesToString(data.data);
+
+      if(StringUtil::containsAny(msg, {"labda", "kacsa", "idk"})) {
+         disconnect();
+         return;
       }
-      std::cout << "\n";
+
+      asio::post(*context, [&, data]() {
+         for (auto& connection : getServer().getConnections()) {
+            if (connection.get() == this) continue;
+            connection->sendPacket(data);
+         }
+      });
    }
 };
 
-class SimpleChatServer : public SN::Server {
+class SimpleChatServer : public PN::Server<> {
 public:
-   using SN::Server::Server;
+   using PN::Server<>::Server;
 
 protected:
    void onStart() override {
@@ -48,12 +58,12 @@ protected:
       startAccept();
    }
 
-   std::shared_ptr<SN::Connection> onAccept(tcp::socket& socket) override {
-      printServer("client Accepted");
-      return std::make_shared<SimpleChatConnection>(&this->getContext(), *this, socket);
+   std::shared_ptr<SN::Connection> onAccept(tcp::socket &socket) override {
+      printServer("client Accepted", getPort(), true);
+      return std::make_shared<SimpleChatConnection>(this->getContext(),*this, socket);
    }
 
-   void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
+   void onDisconnect(std::shared_ptr<PN::Connection<>> connection) override {
       printServer("client disconnected", getPort(), true);
    }
 };
@@ -129,7 +139,7 @@ int main() {
             SimpleChatServer::printServer(""+msg);
             asio::post(server.getContext(), [&, msg]() {
                for(auto& connection : server.getConnections()) {
-                  connection->send(StringUtil::stringToBytes(msg));
+                  connection->sendPacket(StringUtil::stringToBytes(msg));
                }
             });
             break;
