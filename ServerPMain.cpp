@@ -1,3 +1,4 @@
+/*
 #include <iostream>
 
 #include "SRC/Util/NestedLoops.h"
@@ -150,5 +151,10 @@ int main() {
 
    server.context.stopThread();
    std::cout << "skipped" << std::endl;
+   return 0;
+}
+/**/
+
+int main() {
    return 0;
 }

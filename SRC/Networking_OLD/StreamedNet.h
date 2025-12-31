@@ -15,6 +15,7 @@
 
 #include "NetContextRef.h"
 #include "NetTSQueue.h"
+#include "NetOWLock.h"
 
 
 #define FlagDef(ID) (1LL << ((ID)-1))
@@ -37,6 +38,8 @@ using asio::ip::tcp;
 #define SNI_STOP_ACCEPT_R 256
 
 namespace SN {
+   class Server;
+
    enum class Event {
       OnStart,
       Aborted,
@@ -64,56 +67,25 @@ namespace SN {
       AcceptorAbortCloseFailed
    };
 
-   class NetStream;
-   class Server;
-
-   class NetStreamAsioW : public std::enable_shared_from_this<SN::NetStreamAsioW> {
-   public:
-      NetStreamAsioW(SN::IOContextHandle&& context, NetStream* parent, tcp::socket&& socket);
-      NetStreamAsioW(SN::IOContextHandle&& context, NetStream* parent);
-
-      void startRead();
-      void startWrite();
-      void abortHalt();
-      
-      void doTick();
-      void doRead();
-      void doWrite();
-
-      ~NetStreamAsioW();
-
-      SN::IOContextHandle context;
-      tcp::socket socket;
-      NetStream* parent = nullptr;
-      std::recursive_mutex guardMutex;
-      asio::error_code ec;
-   };
-
    class NetStream {
    public:
-      NetStream(SN::IOContextController&& controller, tcp::socket&& socket);
-      NetStream(SN::IOContextController&& controller);
-      
-      friend class NetStreamAsioW;
-
+      NetStream(SN::IOContextController context, tcp::socket& socket);
+      NetStream(SN::IOContextController context);
+   
+      void send(const std::vector<uint8_t> msg);
       void startRead();
       void startWrite();
       void stopRead();
       void stopWrite();
-
-      void send(const std::vector<uint8_t> msg);
       void disconnect();
-      void shutdown();
 
-      SN::IOContextHandle& getContext();
-      SN::IOContextRunner& getRunner();
-      SN::IOContextController getControllerClone();
-      tcp::socket& getSocket();
-      std::shared_ptr<SN::NetStreamAsioW> getHandle();
+      void doRead();
+      void doWrite();
+      void doTick();
       ~NetStream();
 
    protected:
-      virtual void abortHalt();
+      virtual void abort();
 
       virtual void onRead() {}
       virtual void onWrite() {}
@@ -125,22 +97,25 @@ namespace SN {
 
    public:
       std::atomic<int> state = SNI_OFFLINE;
-      std::shared_ptr<NetStreamAsioW> processHandler;
 
-      SN::IOContextRunner runner;
+      SN::OWLock oWLock;
+
+      SN::IOContextController context;
+      tcp::socket socket;
+
       std::vector<uint8_t> readBuffer;
+
       SN::TSQueue<std::vector<uint8_t>> writeQ;
       SN::TSQueue<uint8_t> readQ;
+
+      asio::error_code ec;
    };
+
 
    class Client : public NetStream {
    public:
+      Client(SN::IOContextController context);
       Client();
-      Client(SN::IOContextController&& controller);
-      Client(SN::IOContextHandle&& handle);
-      Client(SN::IOContextRunner&& runner);
-      Client(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
-      
 
       void resolve(const std::string& host, uint16_t port);
       void addEndpoint(const std::string& host, uint16_t port);
@@ -148,7 +123,7 @@ namespace SN {
       void disconnect();
 
    protected:
-      virtual void abortHalt() override;
+      virtual void abort() override;
 
       virtual void onResolve() {}
       virtual void onConnect() {}
@@ -161,8 +136,8 @@ namespace SN {
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
 
-   protected:
-      std::shared_ptr<tcp::resolver> resolver;
+      tcp::resolver resolver;
+
       std::vector<tcp::endpoint> endpoints;
 
    public:
@@ -171,15 +146,14 @@ namespace SN {
 
    class Connection : public NetStream {
    public:
-      Connection(SN::IOContextController&& context, Server& server, tcp::socket& accepted);
-
+      Connection(SN::IOContextController context, Server& serverRef, tcp::socket& accepted);
       void start();
-      Server& getServer();
-
       void disconnect();
 
+      Server& getServer();
+
    protected:
-      virtual void abortHalt() override;
+      virtual void abort() override;
 
       virtual void onConnect() {}
       virtual void onStart() {}
@@ -196,78 +170,51 @@ namespace SN {
       friend class Server;
    };
 
-   class ServerAsioW : public std::enable_shared_from_this<SN::ServerAsioW> {
-   public:
-      ServerAsioW(SN::IOContextHandle&& context, SN::Server* parent);
-
-      void startAccept();
-      void abortHalt();
-
-      void doTick();
-      void doAccept();
-
-      ~ServerAsioW();
-
-      SN::IOContextHandle context;
-      std::optional<tcp::acceptor> acceptor;
-      std::optional<tcp::socket> pendingSocket;
-      SN::Server* parent = nullptr;
-      std::recursive_mutex guardMutex;
-      asio::error_code ec;
-   };
 
    class Server {
    public:
+      Server(SN::IOContextController context);
       Server();
-      Server(SN::IOContextController&& controller);
-      Server(SN::IOContextHandle&& handle);
-      Server(SN::IOContextRunner&& runner);
-      Server(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
-
-      friend class ServerAsioW;
 
       void start(uint16_t port);
       void startAccept();
       void stopAccept();
-
       void close();
-      void removeConnection(Connection* connectionPtr);
-      void shutdown();
-      
-      SN::IOContextHandle& getContext();
-      SN::IOContextRunner& getRunner();
-      SN::IOContextController getControllerClone();
-      std::optional<tcp::acceptor>& getAcceptor();
-      std::optional<tcp::socket>& getPending();
+
+      asio::io_context& getContext();
       uint16_t getPort();
-      std::vector<std::shared_ptr<SN::Connection>>& getConnections();
-      std::shared_ptr<SN::ServerAsioW> getHandle();
+      std::vector<std::shared_ptr<Connection>>& getConnections();
+
+      void abort();
+      void doAccept();
+      void doTick();
+      void removeConnection(Connection* connectionPtr);
       ~Server();
 
-   protected:
-      virtual void abortHalt();
-
       virtual std::shared_ptr<Connection> onAccept(tcp::socket& socket);
-      virtual void onStart() { startAccept(); }
-
       virtual void onTick() {}
+      virtual void onStart() { startAccept(); }
       virtual void onDisconnect(std::shared_ptr<Connection> connection) {}
 
       virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
 
+      static void printServer(std::string&& serverStr, uint16_t port = 0, bool wPort = false);
+
    public:
       std::atomic<int> state = SNI_OFFLINE;
-      std::shared_ptr<ServerAsioW> processHandler;
 
-      SN::IOContextRunner runner;
+      SN::OWLock oWLock;
 
+      SN::IOContextController context;
+      asio::error_code ec;
+      std::optional<tcp::acceptor> acceptor;
+      std::optional<tcp::socket> pendingSocket;
       std::vector<std::shared_ptr<Connection>> connections;
       uint16_t port = 0;
 
-   public:
-      static void printServer(std::string&& serverStr, uint16_t port = 0, bool wPort = false);
+      friend class SN::Connection;
    };
 }
 
-#endif // ~NCORE_STREAMED_NET_H
+#endif //~NCORE_STREAMED_NET_H

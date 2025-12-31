@@ -14,7 +14,7 @@
 #include <asio/ts/internet.hpp>
 
 namespace SN {
-   class IOContextController {
+   class IOContextHandle {
    public:
       enum class Mode {
          ExternalShared,
@@ -22,19 +22,40 @@ namespace SN {
          InternalOwned
       };
 
-      IOContextController(IOContextController&&) = default;
-      IOContextController& operator=(IOContextController&&) = default;
+      IOContextHandle(const IOContextHandle&) = delete;
+      IOContextHandle& operator=(const IOContextHandle&) = delete;
 
-      IOContextController(const IOContextController&) = delete;
-      IOContextController& operator=(const IOContextController&) = delete;
+      IOContextHandle(std::shared_ptr<asio::io_context> ctx) : mode(Mode::ExternalShared), shared(ctx), raw(ctx.get()) {}
 
-      IOContextController(std::shared_ptr<asio::io_context> ctx) : mode(Mode::ExternalShared), shared(ctx), raw(ctx.get()) {}
+      IOContextHandle(asio::io_context* ctx) : mode(Mode::ExternalRaw), raw(ctx) {}
 
-      IOContextController(asio::io_context* ctx) : mode(Mode::ExternalRaw), raw(ctx) {}
+      IOContextHandle(asio::io_context& ctx) : mode(Mode::ExternalRaw), raw(&ctx) {}
 
-      IOContextController(asio::io_context& ctx) : mode(Mode::ExternalRaw), raw(&ctx) {}
+      IOContextHandle() : mode(Mode::InternalOwned), owned(std::make_unique<asio::io_context>()), raw(owned.get()) {}
 
-      IOContextController() : mode(Mode::InternalOwned), owned(std::make_unique<asio::io_context>()), raw(owned.get()) {}
+      IOContextHandle(IOContextHandle&& other) noexcept : mode(other.mode), shared(std::move(other.shared)), owned(std::move(other.owned)), raw(other.raw) {
+         other.reset();
+      }
+
+      IOContextHandle& operator=(IOContextHandle&& other) noexcept {
+         if (this != &other) {
+            if (raw) {
+               if(mode == Mode::InternalOwned) {
+                  raw->stop();
+                  printf("INTER: ");
+               }
+               printf("object handle destroyed\n");
+            }
+
+            mode = other.mode;
+            shared = std::move(other.shared);
+            owned = std::move(other.owned);
+            raw = other.raw;
+
+            other.reset();
+         }
+         return *this;
+      }
 
       asio::io_context& get() { return *raw; }
       asio::io_context& operator*() { return *raw; }
@@ -43,36 +64,146 @@ namespace SN {
       asio::io_context* ptr() { return raw; }
       const asio::io_context* ptr() const { return raw; }
 
-      void startThread() {
+      void reset() noexcept {
+         raw = nullptr;
+         shared.reset();
+         owned.reset();
+      }
+
+      ~IOContextHandle() {
+         if(!raw) return;
+         if(mode == Mode::InternalOwned) {
+            raw->stop();
+            printf("INTER: ");
+         }
+         printf("object handle destroyed\n");
+      }
+
+   public:
+      Mode mode;
+
+   private:
+      std::shared_ptr<asio::io_context> shared;
+      std::unique_ptr<asio::io_context> owned;
+      asio::io_context* raw = nullptr;
+   };
+
+   class IOContextRunner {
+   public:
+      enum class Mode {
+         ExternalShared,
+         ExternalRaw,
+         InternalOwned
+      };
+
+      IOContextRunner(const IOContextRunner&) = delete;
+      IOContextRunner& operator=(const IOContextRunner&) = delete;
+
+      IOContextRunner(std::shared_ptr<std::thread> ctx) : mode(Mode::ExternalShared), shared(ctx), raw(ctx.get()) {}
+
+      IOContextRunner(std::thread* ctx) : mode(Mode::ExternalRaw), raw(ctx) {}
+
+      IOContextRunner(std::thread& ctx) : mode(Mode::ExternalRaw), raw(&ctx) {}
+
+      IOContextRunner() : mode(Mode::InternalOwned), owned(std::make_unique<std::thread>()), raw(owned.get()) {}
+      
+      IOContextRunner(IOContextRunner&& other) noexcept : mode(other.mode), shared(std::move(other.shared)), owned(std::move(other.owned)), raw(other.raw) {
+         other.reset();
+      }
+
+      IOContextRunner& operator=(IOContextRunner&& other) noexcept {
+         if (this != &other) {
+            if (raw) {
+               if(mode == Mode::InternalOwned) {
+                  stopThread();
+                  printf("INTER: ");
+               }
+               printf("object runner destroyed\n");
+            }
+
+            mode = other.mode;
+            shared = std::move(other.shared);
+            owned = std::move(other.owned);
+            raw = other.raw;
+
+            other.reset();
+         }
+         return *this;
+      }
+
+      std::thread& get() { return *raw; }
+      std::thread& operator*() { return *raw; }
+      std::thread* operator->() { return raw; }
+      const std::thread* operator->() const { return raw; }
+      std::thread* ptr() { return raw; }
+      const std::thread* ptr() const { return raw; }
+
+      void startThread(asio::io_context* context) {
          if (!threadRunning) {
             threadRunning = true;
-            thread = std::thread([&]() {
-               get().run();
-            });
+            get() = std::thread([](asio::io_context* context){
+               context->run();
+               printf("work done\n");
+            }, context);
          }
       }
 
       void stopThread() {
          if (threadRunning) {
-            get().stop();
-            if (thread.joinable()) thread.join();
+            if (get().joinable()) get().join();
             threadRunning = false;
          }
       }
 
-      ~IOContextController() {
-         // stopThread();
+      void reset() noexcept {
+         raw = nullptr;
+         shared.reset();
+         owned.reset();
       }
 
-   private:
+      ~IOContextRunner() {
+         if (raw) {
+            if(mode == Mode::InternalOwned) {
+               stopThread();
+               printf("INTER: ");
+            }
+            printf("object runner destroyed\n");
+         }
+      }
+
+   public:
       Mode mode;
 
-      std::shared_ptr<asio::io_context> shared;
-      std::unique_ptr<asio::io_context> owned;
-      asio::io_context* raw = nullptr;
-
-      std::thread thread;
+   private:
+      std::shared_ptr<std::thread> shared;
+      std::unique_ptr<std::thread> owned;
+      std::thread* raw = nullptr;
       bool threadRunning = false;
    };
+
+   class IOContextController {
+   public:
+      IOContextController(const IOContextController&) = delete;
+      IOContextController& operator=(const IOContextController&) = delete;
+
+      IOContextController(IOContextController&&) = default;
+      IOContextController& operator=(IOContextController&&) = default;
+
+      IOContextController(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
+      IOContextController(SN::IOContextHandle&& handle);
+      IOContextController(SN::IOContextRunner&& runner);
+      IOContextController();
+
+      SN::IOContextHandle handle;
+      SN::IOContextRunner runner;
+   };
+
+   inline SN::IOContextController::IOContextController(SN::IOContextHandle&& handle_, SN::IOContextRunner&& runner_) : handle(std::move(handle_)), runner(std::move(runner_)) {}
+
+   inline SN::IOContextController::IOContextController(SN::IOContextHandle&& handle_) : handle(std::move(handle_)), runner(SN::IOContextRunner()) {}
+
+   inline SN::IOContextController::IOContextController(SN::IOContextRunner&& runner_) : handle(SN::IOContextHandle()), runner(std::move(runner_)) {}
+
+   inline SN::IOContextController::IOContextController() : handle(SN::IOContextHandle()), runner(SN::IOContextRunner()) {}
 }
 #endif //~NCORE_IOCONTEXT_CONTROLLER_H

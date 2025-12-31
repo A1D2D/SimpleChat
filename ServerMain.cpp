@@ -4,7 +4,6 @@
 
 #include "SRC/Util/StringUtil.h"
 #include "SRC/Networking/StreamedNet.h"
-#include "asio/io_context.hpp"
 
 enum ServerCommand {
    SC_StartServer,
@@ -13,6 +12,7 @@ enum ServerCommand {
    SC_Message,
    SC_ReqClientCount
 };
+
 
 class SimpleChatConnection : public SN::Connection {
 public:
@@ -50,7 +50,7 @@ protected:
 
    std::shared_ptr<SN::Connection> onAccept(tcp::socket& socket) override {
       printServer("client Accepted");
-      return std::make_shared<SimpleChatConnection>(&this->getContext(), *this, socket);
+      return std::make_shared<SimpleChatConnection>(this->getControllerClone(), *this, socket);
    }
 
    void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
@@ -78,67 +78,71 @@ int main() {
    std::cout << "SimpleChat: Server\n";
    // resetAnsiStyle();
 
-   std::shared_ptr<asio::io_context> context = std::make_shared<asio::io_context>();
-   SimpleChatServer server(context);
-   server.context.startThread();
+   {
+      SimpleChatServer server;
 
-   SN::NestedLoop nl;
-   for (;;) {
-      std::getline(std::cin, msg);
-      args = StringUtil::split(msg, " ");
-      if(args.empty()) continue;
-      std::string cmdStr = args[0];
-      shift_left(args.begin(), args.end(), 1);
+      SN::NestedLoop nl;
+      for (;;) {
+         std::getline(std::cin, msg);
+         args = StringUtil::split(msg, " ");
+         if(args.empty()) continue;
+         std::string cmdStr = args[0];
+         shift_left(args.begin(), args.end(), 1);
 
-      auto it = commands.find(cmdStr);
-      if (it == commands.end()) {
-         // std::cout << "Unknown command\n";
-         // continue;
-         cmd = SC_Message;
-      } else {
-         cmd = it->second;
-      }
-
-      switch (cmd) {
-         case SC_Exit: {
-            NL_BREAK(nl, 0);
+         auto it = commands.find(cmdStr);
+         if (it == commands.end()) {
+            // std::cout << "Unknown command\n";
+            // continue;
+            cmd = SC_Message;
+         } else {
+            cmd = it->second;
          }
-         case SC_StartServer: {
-            auto port = StringUtil::parseArg<uint16_t>(args, 0);
-            if(!port) {
-               std::cerr << "incorrect arg usage\n";
-               continue;
+
+         switch (cmd) {
+            case SC_Exit: {
+               NL_BREAK(nl, 0);
             }
-
-            server.start(*port);
-            SimpleChatServer::printServer("Server Created..", server.getPort(), true);
-            break;
-         }
-         case SC_StopServer: {
-            server.close();
-            SimpleChatServer::printServer("server closed");
-            break;
-         }
-         case SC_ReqClientCount: {
-            asio::post(server.getContext(), [&, msg]() {
-               std::cout << "client connections stored: " << server.getConnections().size() << "\n";
-            });
-            break;
-         }
-         default: {
-            SimpleChatServer::printServer(""+msg);
-            asio::post(server.getContext(), [&, msg]() {
-               for(auto& connection : server.getConnections()) {
-                  connection->send(StringUtil::stringToBytes(msg));
+            case SC_StartServer: {
+               auto port = StringUtil::parseArg<uint16_t>(args, 0);
+               if(!port) {
+                  std::cerr << "incorrect arg usage\n";
+                  continue;
                }
-            });
-            break;
+
+               server.start(*port);
+               SimpleChatServer::printServer("Server Created..", server.getPort(), true);
+               break;
+            }
+            case SC_StopServer: {
+               server.close();
+               SimpleChatServer::printServer("server closed");
+               break;
+            }
+            case SC_ReqClientCount: {
+               auto lifeTGuard = server.getHandle();
+               asio::post(*server.getContext(), [&, msg, lifeTGuard]() {
+                  std::cout << "client connections stored: " << server.getConnections().size() << "\n";
+               });
+               break;
+            }
+            default: {
+               SimpleChatServer::printServer(""+msg);
+               auto lifeTGuard = server.getHandle();
+               asio::post(*server.getContext(), [&, msg, lifeTGuard]() {
+                  for(auto& connection : server.getConnections()) {
+                     connection->send(StringUtil::stringToBytes(msg));
+                  }
+               });
+               break;
+            }
          }
+         NL_CHECK(nl, 0);
       }
-      NL_CHECK(nl, 0);
+      
+      server.shutdown();
    }
 
-   server.context.stopThread();
    std::cout << "skipped" << std::endl;
+   while(true);
    return 0;
 }

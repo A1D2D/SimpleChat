@@ -1,3 +1,4 @@
+/*
 #include "SRC/Util/NestedLoops.h"
 #include <iostream>
 #include <string>
@@ -107,5 +108,10 @@ int main(int argc, const char** argv) {
 
    client.context.stopThread();
    std::cout << "skipped" << std::endl;
+   return 0;
+}
+/**/
+
+int main() {
    return 0;
 }
