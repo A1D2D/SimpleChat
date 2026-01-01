@@ -35,7 +35,7 @@ void SN::NetStreamAsioW::startWrite() {
 }
 
 void SN::NetStreamAsioW::abortHalt() {
-   std::cout << "actual abortHalt called\n";
+   NCore_Log("actual abortHalt called\n")
    std::lock_guard lock(guardMutex);
    if(parent) {
       if(HasNoFlag(parent->state, SNI_ONLINE) && HasNoFlag(parent->state, SNI_RESOLVEING) && HasNoFlag(parent->state, SNI_CONNECTING) && !socket.is_open()) return;
@@ -71,7 +71,7 @@ void SN::NetStreamAsioW::doTick() {
 }
 
 void SN::NetStreamAsioW::doRead() {
-   std::cout << "read\n";
+   NCore_Log("read\n")
    auto lifeTGuard(shared_from_this());
 
    auto readLambda = [this, lifeTGuard](std::error_code ec, std::size_t length) {
@@ -79,7 +79,8 @@ void SN::NetStreamAsioW::doRead() {
       if(!parent) return;
 
       if(ec) {
-         std::cout << "writeError: " << ec.message() << "\n";
+         NCore_Log("ReadFailed: " << ec.message() << "\n")
+         parent->onError(Error::ReadFailed, ec);
          RemoveFlag(parent->state, SNI_IN_READ);
          RemoveFlag(parent->state, SNI_STOP_READ_R);
 
@@ -103,7 +104,7 @@ void SN::NetStreamAsioW::doRead() {
 }
 
 void SN::NetStreamAsioW::doWrite() {
-   std::cout << "wrote\n";
+   NCore_Log("write\n")
    auto lifeTGuard(shared_from_this());
 
    auto writeLambda = [this, lifeTGuard](std::error_code ec, std::size_t length) {
@@ -111,7 +112,8 @@ void SN::NetStreamAsioW::doWrite() {
       if(!parent) return;
 
       if(ec) {
-         std::cout << "writeError: " << ec.message() << "\n";
+         NCore_Log("WriteFailed: " << ec.message() << "\n")
+         parent->onError(Error::WriteFailed, ec);
          RemoveFlag(parent->state, SNI_IN_WRITE);
          RemoveFlag(parent->state, SNI_STOP_WRITE_R);
 
@@ -134,7 +136,7 @@ void SN::NetStreamAsioW::doWrite() {
 }
 
 SN::NetStreamAsioW::~NetStreamAsioW() {
-   std::cout << "object got actualy destroyed\n";
+   NCore_Log("object got actualy destroyed\n")
 }
 
 
@@ -181,7 +183,7 @@ void SN::NetStream::send(const std::vector<uint8_t> msg) {
 
 void SN::NetStream::abortHalt() {
    if(!processHandler->parent) return;
-   std::cout << "abortHalt queued\n";
+   NCore_Log("abortHalt queued\n")
    asio::post(*processHandler->context, [handler = processHandler]() {
       handler->abortHalt();
    });
@@ -220,7 +222,7 @@ std::shared_ptr<SN::NetStreamAsioW> SN::NetStream::getHandle() {
 }
 
 SN::NetStream::~NetStream() {
-   std::cout << "destroy object\n";
+   NCore_Log("destroy object\n")
    shutdown();
 }
 
@@ -335,12 +337,13 @@ void SN::Client::resolve(const std::string& host, uint16_t port) {
 
       RemoveFlag(parent->state, SNI_RESOLVEING);
       if(ec) {
-         std::cout << "resolve failed: " << ec.message() << "\n";
+         NCore_Log("ResolveFailed: " << ec.message() << "\n")
+         parent->onError(Error::ResolveFailed, ec);
       } else {
          parent->endpoints.clear();
          for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it)
             parent->endpoints.push_back(it->endpoint());
-         parent->onResolve(); //TODO: Potential guard pass needed
+         parent->onResolve();
       }
    };
 
@@ -352,7 +355,8 @@ void SN::Client::addEndpoint(const std::string& host, uint16_t port) {
    asio::error_code ec;
    auto addr = asio::ip::make_address(host, ec);
    if (ec) {
-      std::cout << "Invalid address (" << host << "): " << ec.message() << "\n";
+      NCore_Log("Invalid address (" << host << "): " << ec.message() << "\n")
+      onError(Error::InvalidAddress, ec);
       return;
    }
    endpoints.push_back(tcp::endpoint(addr, port));
@@ -371,11 +375,12 @@ void SN::Client::connect() {
       RemoveFlag(parent->state, SNI_CONNECTING);
 
       if(ec) {
-         std::cout << "Connection failed\n";
+         NCore_Log("Connection failed: " << ec.message() << "\n")
+         parent->onError(Error::ConnectFailed, ec);
          return;
       } else {
          AddFlag(parent->state, SNI_ONLINE);
-         parent->onConnect(); //TODO: Potential guard pass needed
+         parent->onConnect();
       }
    };
 
@@ -600,7 +605,7 @@ void SN::ServerAsioW::startAccept() {
 }
 
 void SN::ServerAsioW::abortHalt() {
-   std::cout << "actual server abortHalt called\n";
+   NCore_Log("actual server abortHalt called\n")
    std::lock_guard lock(guardMutex);
    if(parent) {
       if(HasNoFlag(parent->state, SNI_ONLINE) && (!acceptor || !acceptor->is_open())) return;
@@ -638,7 +643,7 @@ void SN::ServerAsioW::doTick() {
 }
 
 void SN::ServerAsioW::doAccept() {
-   std::cout << "accept\n";
+   NCore_Log("accept\n")
    auto lifeTGuard(shared_from_this());
    std::lock_guard lock(guardMutex);
    if(!parent) return;
@@ -657,8 +662,10 @@ void SN::ServerAsioW::doAccept() {
 
       ec = ec_;
       if(ec) {
-         std::cout << "acceptError: " << ec.message() << "\n";
+         NCore_Log("AcceptFailed: " << ec.message() << "\n")
+         
          if(parent) {
+            parent->onError(Error::AcceptFailed, ec);
             RemoveFlag(parent->state, SNI_IN_READ);
             RemoveFlag(parent->state, SNI_STOP_READ_R);
             parent->abortHalt();
@@ -677,7 +684,7 @@ void SN::ServerAsioW::doAccept() {
 }
 
 SN::ServerAsioW::~ServerAsioW() {
-   std::cout << "server object got actualy destroyed\n";
+   NCore_Log("server object got actualy destroyed\n")
 }
 
 
@@ -747,7 +754,7 @@ void SN::Server::stopAccept() {
 
 void SN::Server::abortHalt() {
    if(!processHandler->parent) return;
-   std::cout << "server abortHalt queued\n";
+   NCore_Log("server abortHalt queued\n")
    asio::post(*processHandler->context, [handler = processHandler]() {
       handler->abortHalt();
    });
@@ -810,7 +817,7 @@ std::shared_ptr<SN::ServerAsioW> SN::Server::getHandle() {
 }
 
 SN::Server::~Server() {
-   std::cout << "server destroy object\n";
+   NCore_Log("server destroy object\n")
    shutdown();
 }
 
@@ -889,6 +896,9 @@ void SN::Server::onError(Error err, const asio::error_code& ec) {
          break;
       case Error::AcceptorAbortCloseFailed:
          std::cout << "ERR AcceptorAbortCloseFailed" << ec.message() << "\n";
+         break;
+      case Error::InvalidAddress:
+         std::cout << "ERR InvalidAddress" << ec.message() << "\n";
          break;
       default:
          break;

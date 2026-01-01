@@ -1,5 +1,5 @@
-#ifndef NESTEDLOOPS_H
-#define NESTEDLOOPS_H
+#ifndef NCORE_NESTEDLOOPS_H
+#define NCORE_NESTEDLOOPS_H
 
 #include <cstdint>
 #define NL_BREAK(CTX, N) \
@@ -33,4 +33,4 @@ namespace SN {
 }
 
 
-#endif //NESTEDLOOPS_H
+#endif //NCORE_NESTEDLOOPS_H

@@ -13,7 +13,6 @@ enum ServerCommand {
    SC_ReqClientCount
 };
 
-
 class SimpleChatConnection : public SN::Connection {
 public:
    using SN::Connection::Connection;
@@ -143,6 +142,5 @@ int main() {
    }
 
    std::cout << "skipped" << std::endl;
-   while(true);
    return 0;
 }

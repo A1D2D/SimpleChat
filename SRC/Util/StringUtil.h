@@ -1,7 +1,5 @@
-#ifndef PORTBRIDGE_STRINGUTIL_H
-#define PORTBRIDGE_STRINGUTIL_H
-
-// #include <VORTEX_MP/LinearAlg>
+#ifndef NCORE_STRINGUTIL_H
+#define NCORE_STRINGUTIL_H
 
 #include <charconv>
 #include <optional>
@@ -197,4 +195,4 @@ namespace StringUtil {
    }
 };
 
-#endif //PORTBRIDGE_STRINGUTIL_H
+#endif //NCORE_STRINGUTIL_H

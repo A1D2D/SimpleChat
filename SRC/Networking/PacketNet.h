@@ -256,7 +256,7 @@ namespace PN {
             incoming.push_back(readQ.front());
             readQ.pop();
          }
-         // std::cout << "FullPacket: " << StringUtil::bytesToString(incoming) << "\n";
+         // NCore_Log("FullPacket: " << StringUtil::bytesToString(incoming) << "\n")
          processPackets();
       }
 
@@ -338,7 +338,7 @@ namespace PN {
             incoming.push_back(readQ.front());
             readQ.pop();
          }
-         // std::cout << "FullPacket: " << StringUtil::bytesToString(incoming) << "\n";
+         // NCore_Log("FullPacket: " << StringUtil::bytesToString(incoming) << "\n")
          processPackets();
       }
 

@@ -4,15 +4,7 @@
 #include <memory>
 #include <string>
 
-#ifdef _WIN32
-   #undef WINAPI_FAMILY
-   #define WIN32_WINNT 0x0A00
-#endif
-
-#include <asio.hpp>
-#include <asio/ts/buffer.hpp>
-#include <asio/ts/internet.hpp>
-
+#include "../Util/AsioInclude.h"
 #include "NetContextRef.h"
 #include "NetTSQueue.h"
 
@@ -61,7 +53,8 @@ namespace SN {
       AbortShutdownFailed,
       AbortCloseFailed,
       AcceptorAbortCancelFailed,
-      AcceptorAbortCloseFailed
+      AcceptorAbortCloseFailed,
+      InvalidAddress
    };
 
    class NetStream;

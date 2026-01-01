@@ -4,14 +4,7 @@
 #include <thread>
 #include <memory>
 
-#ifdef _WIN32
-   #undef WINAPI_FAMILY
-   #define WIN32_WINNT 0x0A00
-#endif
-
-#include <asio.hpp>
-#include <asio/ts/buffer.hpp>
-#include <asio/ts/internet.hpp>
+#include "../Util/AsioInclude.h"
 
 namespace SN {
    class IOContextHandle {
@@ -42,9 +35,9 @@ namespace SN {
             if (raw) {
                if(mode == Mode::InternalOwned) {
                   raw->stop();
-                  printf("INTER: ");
+                  NCore_Log("INTER: ")
                }
-               printf("object handle destroyed\n");
+               NCore_Log("object handle destroyed\n")
             }
 
             mode = other.mode;
@@ -74,9 +67,9 @@ namespace SN {
          if(!raw) return;
          if(mode == Mode::InternalOwned) {
             raw->stop();
-            printf("INTER: ");
+            NCore_Log("INTER: ")
          }
-         printf("object handle destroyed\n");
+         NCore_Log("object handle destroyed\n")
       }
 
    public:
@@ -116,9 +109,9 @@ namespace SN {
             if (raw) {
                if(mode == Mode::InternalOwned) {
                   stopThread();
-                  printf("INTER: ");
+                  NCore_Log("INTER: ")
                }
-               printf("object runner destroyed\n");
+               NCore_Log("object runner destroyed\n")
             }
 
             mode = other.mode;
@@ -143,7 +136,7 @@ namespace SN {
             threadRunning = true;
             get() = std::thread([](asio::io_context* context){
                context->run();
-               printf("work done\n");
+               NCore_Log("work done\n")
             }, context);
          }
       }
@@ -165,9 +158,9 @@ namespace SN {
          if (raw) {
             if(mode == Mode::InternalOwned) {
                stopThread();
-               printf("INTER: ");
+               NCore_Log("INTER: ")
             }
-            printf("object runner destroyed\n");
+            NCore_Log("object runner destroyed\n")
          }
       }
 
