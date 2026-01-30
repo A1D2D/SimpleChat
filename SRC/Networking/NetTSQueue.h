@@ -8,41 +8,45 @@ namespace SN {
    template<typename T>
    class TSQueue {
    public:
-      TSQueue() = default;
-      TSQueue(const TSQueue<T>&) = delete;
+      TSQueue() : queueMutex(std::make_unique<std::mutex>()) {}
+      TSQueue(const TSQueue&) = delete;
+      TSQueue& operator=(const TSQueue&) = delete;
+
+      TSQueue(TSQueue&&) noexcept = default;
+      TSQueue& operator=(TSQueue&&) noexcept = default;
 
       bool empty() const {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          return queueData.empty();
       }
 
       unsigned int size() const {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          return queueData.size();
       }
 
       const T& front() {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          return queueData.front();
       }
 
       void push(const T& val) {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          queueData.push(val);
       }
 
       void push(const T&& val) {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          queueData.push(std::move(val));
       }
 
       void pop() {
-         std::scoped_lock lock(queueMutex);
+         std::scoped_lock lock(*queueMutex);
          queueData.pop();
       }
       
    protected:
-      mutable std::mutex queueMutex;
+      mutable std::unique_ptr<std::mutex> queueMutex;
       std::queue<T> queueData;
    };
 }

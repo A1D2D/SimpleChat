@@ -5,17 +5,17 @@
 
 /*---------------------------NET_STREAM_ASIO_WRAPPER---------------------------*/
 SN::NetStreamAsioW::NetStreamAsioW(SN::IOContextHandle&& context_, SN::NetStream* parent_, tcp::socket&& socket_) : context(std::move(context_)), socket(std::move(socket_)), parent(parent_) {
+   NCore_Log("netstream wrapper created\n")
 }
 
 SN::NetStreamAsioW::NetStreamAsioW(SN::IOContextHandle&& context_, SN::NetStream* parent_) : context(std::move(context_)), socket(*context), parent(parent_) {
+   NCore_Log("netstream wrapper created\n")
 }
 
 void SN::NetStreamAsioW::startRead() {
    auto lifeTGuard(shared_from_this());
-   std::lock_guard lock(guardMutex);
-   if(!parent) return;
 
-   if(HasFlag(parent->state, SNI_IN_READ)) return;
+   if(HasFlag(state, SNI_IN_READ)) return;
 
    asio::post(*context, [this, lifeTGuard]() {
       doRead();
@@ -24,25 +24,32 @@ void SN::NetStreamAsioW::startRead() {
 
 void SN::NetStreamAsioW::startWrite() {
    auto lifeTGuard(shared_from_this());
-   std::lock_guard lock(guardMutex);
-   if(!parent) return;
    
-   if(HasFlag(parent->state, SNI_IN_WRITE)) return;
+   if(HasFlag(state, SNI_IN_WRITE)) return;
 
    asio::post(*context, [this, lifeTGuard]() {
       doWrite();
    });
 }
 
+void SN::NetStreamAsioW::stopRead() {
+   if(HasNoFlag(state, SNI_IN_READ)) return;
+   AddFlag(state, SNI_STOP_READ_R);
+}
+
+void SN::NetStreamAsioW::stopWrite() {
+   if(HasNoFlag(state, SNI_IN_WRITE)) return;
+   AddFlag(state, SNI_STOP_WRITE_R);
+}
+
 void SN::NetStreamAsioW::abortHalt() {
-   NCore_Log("actual abortHalt called\n")
-   std::lock_guard lock(guardMutex);
-   if(parent) {
-      if(HasNoFlag(parent->state, SNI_ONLINE) && HasNoFlag(parent->state, SNI_RESOLVEING) && HasNoFlag(parent->state, SNI_CONNECTING) && !socket.is_open()) return;
-      RemoveFlag(parent->state, SNI_ONLINE);
-      RemoveFlag(parent->state, SNI_RESOLVEING);
-      RemoveFlag(parent->state, SNI_CONNECTING);
-   }
+   auto lifeTGuard(shared_from_this());
+   NCore_Log("NetStream actual abortHalt called\n")
+   
+   if(HasNoFlag(state, SNI_ONLINE) && HasNoFlag(state, SNI_RESOLVEING) && HasNoFlag(state, SNI_CONNECTING) && !socket.is_open()) return;
+   RemoveFlag(state, SNI_ONLINE);
+   RemoveFlag(state, SNI_RESOLVEING);
+   RemoveFlag(state, SNI_CONNECTING);
 
    if(socket.is_open()) {
       ec = socket.shutdown(tcp::socket::shutdown_both, ec);
@@ -51,6 +58,7 @@ void SN::NetStreamAsioW::abortHalt() {
       if (ec && parent) parent->onError(Error::AbortCloseFailed, ec);
    }
 
+   std::lock_guard lock(guardMutex);
    if(!parent) return;
    parent->onDisconnect();
    parent->onEvent(Event::Disconnected);
@@ -81,8 +89,8 @@ void SN::NetStreamAsioW::doRead() {
       if(ec) {
          NCore_Log("ReadFailed: " << ec.message() << "\n")
          parent->onError(Error::ReadFailed, ec);
-         RemoveFlag(parent->state, SNI_IN_READ);
-         RemoveFlag(parent->state, SNI_STOP_READ_R);
+         RemoveFlag(state, SNI_IN_READ);
+         RemoveFlag(state, SNI_STOP_READ_R);
 
          parent->abortHalt();
          return;
@@ -91,9 +99,9 @@ void SN::NetStreamAsioW::doRead() {
       for (int i = 0; i < length; ++i) parent->readQ.push(parent->readBuffer[i]);
       parent->onRead();
 
-      if(HasFlag(parent->state, SNI_STOP_READ_R)) {
-         RemoveFlag(parent->state, SNI_IN_READ);
-         RemoveFlag(parent->state, SNI_STOP_READ_R);
+      if(HasFlag(state, SNI_STOP_READ_R)) {
+         RemoveFlag(state, SNI_IN_READ);
+         RemoveFlag(state, SNI_STOP_READ_R);
          return;
       }
 
@@ -114,8 +122,8 @@ void SN::NetStreamAsioW::doWrite() {
       if(ec) {
          NCore_Log("WriteFailed: " << ec.message() << "\n")
          parent->onError(Error::WriteFailed, ec);
-         RemoveFlag(parent->state, SNI_IN_WRITE);
-         RemoveFlag(parent->state, SNI_STOP_WRITE_R);
+         RemoveFlag(state, SNI_IN_WRITE);
+         RemoveFlag(state, SNI_STOP_WRITE_R);
 
          parent->abortHalt();
          return;
@@ -123,9 +131,9 @@ void SN::NetStreamAsioW::doWrite() {
       parent->onWrite();
 
       parent->writeQ.pop();
-      if (parent->writeQ.empty() || HasFlag(parent->state, SNI_STOP_WRITE_R)) {
-         RemoveFlag(parent->state, SNI_IN_WRITE);
-         RemoveFlag(parent->state, SNI_STOP_WRITE_R);
+      if (parent->writeQ.empty() || HasFlag(state, SNI_STOP_WRITE_R)) {
+         RemoveFlag(state, SNI_IN_WRITE);
+         RemoveFlag(state, SNI_STOP_WRITE_R);
          return;
       }
 
@@ -136,9 +144,8 @@ void SN::NetStreamAsioW::doWrite() {
 }
 
 SN::NetStreamAsioW::~NetStreamAsioW() {
-   NCore_Log("object got actualy destroyed\n")
+   NCore_Log("NetStreamAsioW: got actualy destroyed\n")
 }
-
 
 
 /*---------------------------NET_STREAM---------------------------*/
@@ -158,6 +165,13 @@ SN::NetStream::NetStream(SN::IOContextController&& controller) : readBuffer(20 *
    }
 }
 
+SN::NetStream::NetStream(NetStream&& other) noexcept : 
+   processHandler(std::move(other.processHandler)), runner(std::move(other.runner)), 
+   readBuffer(std::move(other.readBuffer)), writeQ(std::move(other.writeQ)), 
+   readQ(std::move(other.readQ)), moveGuard(std::move(other.moveGuard)) {
+   processHandler->parent = this;
+}
+
 void SN::NetStream::startRead() {
    processHandler->startRead();
 }
@@ -167,13 +181,11 @@ void SN::NetStream::startWrite() {
 }
 
 void SN::NetStream::stopRead() {
-   if(HasNoFlag(state, SNI_IN_READ)) return;
-   AddFlag(state, SNI_STOP_READ_R);
+   processHandler->stopRead();
 }
 
 void SN::NetStream::stopWrite() {
-   if(HasNoFlag(state, SNI_IN_WRITE)) return;
-   AddFlag(state, SNI_STOP_WRITE_R);
+   processHandler->stopWrite();
 }
 
 void SN::NetStream::send(const std::vector<uint8_t> msg) {
@@ -194,6 +206,7 @@ void SN::NetStream::disconnect() {
 }
 
 void SN::NetStream::shutdown() {
+   if(!moveGuard) return;
    abortHalt();
    {
       std::lock_guard lock(processHandler->guardMutex);
@@ -222,6 +235,7 @@ std::shared_ptr<SN::NetStreamAsioW> SN::NetStream::getHandle() {
 }
 
 SN::NetStream::~NetStream() {
+   if(!moveGuard) return;
    NCore_Log("destroy object\n")
    shutdown();
 }
@@ -327,7 +341,7 @@ SN::Client::Client(SN::IOContextHandle&& handle_, SN::IOContextRunner&& runner_)
 }
 
 void SN::Client::resolve(const std::string& host, uint16_t port) {
-   if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_RESOLVEING) || HasFlag(state, SNI_CONNECTING)) return;
+   if(HasFlag(processHandler->state, SNI_ONLINE) || HasFlag(processHandler->state, SNI_RESOLVEING) || HasFlag(processHandler->state, SNI_CONNECTING)) return;
 
    auto resolveLambda = [handler = processHandler, res = resolver](const std::error_code& ec, tcp::resolver::results_type resultEndpoints) {
       std::lock_guard lock(handler->guardMutex);
@@ -335,7 +349,7 @@ void SN::Client::resolve(const std::string& host, uint16_t port) {
       SN::Client* parent = dynamic_cast<SN::Client*>(handler->parent);
       if(!parent) return;
 
-      RemoveFlag(parent->state, SNI_RESOLVEING);
+      RemoveFlag(handler->state, SNI_RESOLVEING);
       if(ec) {
          NCore_Log("ResolveFailed: " << ec.message() << "\n")
          parent->onError(Error::ResolveFailed, ec);
@@ -347,7 +361,7 @@ void SN::Client::resolve(const std::string& host, uint16_t port) {
       }
    };
 
-   AddFlag(state, SNI_RESOLVEING);
+   AddFlag(processHandler->state, SNI_RESOLVEING);
    resolver->async_resolve(host, std::to_string(port), resolveLambda);
 }
 
@@ -363,7 +377,7 @@ void SN::Client::addEndpoint(const std::string& host, uint16_t port) {
 }
 
 void SN::Client::connect() {
-   if(HasFlag(state, SNI_ONLINE) || HasFlag(state, SNI_CONNECTING)) return;
+   if(HasFlag(processHandler->state, SNI_ONLINE) || HasFlag(processHandler->state, SNI_CONNECTING)) return;
    if(endpoints.empty()) return;
 
    auto connectLambda = [handler = processHandler](const std::error_code& ec, const tcp::endpoint& connectedEndpoint) {
@@ -372,19 +386,19 @@ void SN::Client::connect() {
       SN::Client* parent = dynamic_cast<SN::Client*>(handler->parent);
       if(!parent) return;
 
-      RemoveFlag(parent->state, SNI_CONNECTING);
+      RemoveFlag(handler->state, SNI_CONNECTING);
 
       if(ec) {
          NCore_Log("Connection failed: " << ec.message() << "\n")
          parent->onError(Error::ConnectFailed, ec);
          return;
       } else {
-         AddFlag(parent->state, SNI_ONLINE);
+         AddFlag(handler->state, SNI_ONLINE);
          parent->onConnect();
       }
    };
 
-   AddFlag(state, SNI_CONNECTING);
+   AddFlag(processHandler->state, SNI_CONNECTING);
    asio::async_connect(processHandler->socket, endpoints, connectLambda);
 }
 
@@ -486,8 +500,8 @@ void SN::Client::printClient(std::string&& clientStr, const std::string& ip, uin
 
 
 /*---------------------------CONNECTION---------------------------*/
-SN::Connection::Connection(SN::IOContextController&& context, Server& server_, tcp::socket& accepted) : NetStream(std::move(context), std::move(accepted)), server(server_) {
-   AddFlag(state, SNI_ONLINE);
+SN::Connection::Connection(SN::IOContextController&& context, Server* server_, tcp::socket& accepted) : NetStream(std::move(context), std::move(accepted)), server(server_) {
+   AddFlag(processHandler->state, SNI_ONLINE);
    onConnect();
 }
 
@@ -495,14 +509,14 @@ void SN::Connection::start() {
    onStart();
 }
 
-SN::Server& SN::Connection::getServer() {
+SN::Server* SN::Connection::getServer() {
    return server;
 }
 
 void SN::Connection::abortHalt() {
    NetStream::abortHalt();
 
-   server.removeConnection(this);
+   server->removeConnection(this);
 }
 
 void SN::Connection::disconnect() {
@@ -590,6 +604,7 @@ void SN::Connection::onError(Error err, const asio::error_code& ec) {
 
 /*---------------------------SERVER_ASIO_WRAPPER---------------------------*/
 SN::ServerAsioW::ServerAsioW(SN::IOContextHandle&& context_, SN::Server* parent_) : context(std::move(context_)), parent(parent_) {
+   NCore_Log("server wrapper created\n")
 }
 
 void SN::ServerAsioW::startAccept() {
@@ -597,19 +612,25 @@ void SN::ServerAsioW::startAccept() {
    std::lock_guard lock(guardMutex);
    if(!parent) return;
 
-   if(HasFlag(parent->state, SNI_IN_ACCEPT)) return;
+   if(HasFlag(state, SNI_IN_ACCEPT)) return;
 
    asio::post(*context, [this, lifeTGuard]() {
       doAccept();
    });
 }
 
+void SN::ServerAsioW::stopAccept() {
+   if(HasNoFlag(state, SNI_IN_ACCEPT)) return;
+   AddFlag(state, SNI_STOP_ACCEPT_R);
+}
+
 void SN::ServerAsioW::abortHalt() {
-   NCore_Log("actual server abortHalt called\n")
+   auto lifeTGuard(shared_from_this());
+   NCore_Log("actual Server abortHalt called\n")
    std::lock_guard lock(guardMutex);
    if(parent) {
-      if(HasNoFlag(parent->state, SNI_ONLINE) && (!acceptor || !acceptor->is_open())) return;
-      RemoveFlag(parent->state, SNI_ONLINE);
+      if(HasNoFlag(state, SNI_ONLINE) && (!acceptor || !acceptor->is_open())) return;
+      RemoveFlag(state, SNI_ONLINE);
    }
 
    if(acceptor && acceptor->is_open()) {
@@ -620,8 +641,9 @@ void SN::ServerAsioW::abortHalt() {
    }
 
    if(!parent) return;
-   for(auto& connection : parent->connections) {
-      connection->disconnect();
+
+   while (!parent->connections.empty()) {
+      parent->connections.back()->disconnect();
    }
 
    parent->connections.clear();
@@ -645,12 +667,10 @@ void SN::ServerAsioW::doTick() {
 void SN::ServerAsioW::doAccept() {
    NCore_Log("accept\n")
    auto lifeTGuard(shared_from_this());
-   std::lock_guard lock(guardMutex);
-   if(!parent) return;
 
    if(!acceptor) {
-      RemoveFlag(parent->state, SNI_OFFLINE);
-      RemoveFlag(parent->state, SNI_STOP_ACCEPT_R);
+      RemoveFlag(state, SNI_OFFLINE);
+      RemoveFlag(state, SNI_STOP_ACCEPT_R);
       return;
    }
 
@@ -666,8 +686,8 @@ void SN::ServerAsioW::doAccept() {
          
          if(parent) {
             parent->onError(Error::AcceptFailed, ec);
-            RemoveFlag(parent->state, SNI_IN_READ);
-            RemoveFlag(parent->state, SNI_STOP_READ_R);
+            RemoveFlag(state, SNI_IN_READ);
+            RemoveFlag(state, SNI_STOP_READ_R);
             parent->abortHalt();
          }
 
@@ -684,7 +704,7 @@ void SN::ServerAsioW::doAccept() {
 }
 
 SN::ServerAsioW::~ServerAsioW() {
-   NCore_Log("server object got actualy destroyed\n")
+   NCore_Log("Server got actualy destroyed\n")
 }
 
 
@@ -730,12 +750,19 @@ SN::Server::Server(SN::IOContextHandle&& handle_, SN::IOContextRunner&& runner_)
    }
 }
 
+SN::Server::Server(Server&& other) noexcept : processHandler(std::move(other.processHandler)), 
+   runner(std::move(other.runner)), connections(std::move(other.connections)), 
+   port(std::move(other.port)), moveGuard(std::move(other.moveGuard)) {
+   processHandler->parent = this;
+   for (auto connection : connections) connection->server = this;
+}
+
 void SN::Server::start(uint16_t port_) {
-   if(HasFlag(state, SNI_ONLINE)) {
+   if(HasFlag(processHandler->state, SNI_ONLINE)) {
       return;
    }
 
-   AddFlag(state, SNI_ONLINE);
+   AddFlag(processHandler->state, SNI_ONLINE);
    port = port_;
 
    processHandler->acceptor.emplace(*processHandler->context, tcp::endpoint(tcp::v4(), port));
@@ -748,13 +775,13 @@ void SN::Server::startAccept() {
 }
 
 void SN::Server::stopAccept() {
-   if(HasNoFlag(state, SNI_IN_ACCEPT)) return;
-   AddFlag(state, SNI_STOP_ACCEPT_R);
+   processHandler->stopAccept();
 }
 
 void SN::Server::abortHalt() {
    if(!processHandler->parent) return;
    NCore_Log("server abortHalt queued\n")
+
    asio::post(*processHandler->context, [handler = processHandler]() {
       handler->abortHalt();
    });
@@ -765,18 +792,18 @@ void SN::Server::close() {
 }
 
 void SN::Server::removeConnection(Connection* connectionPtr) {
-   auto removeLambda = [this, connectionPtr](std::shared_ptr<Connection>& conn) -> bool {
-      if(conn.get() == connectionPtr) {
-         onDisconnect(conn);
-         return true;
-      }
-      return false;
-   };
+   auto it = std::find_if(connections.begin(), connections.end(), [connectionPtr](const std::shared_ptr<Connection>& conn) {
+      return conn.get() == connectionPtr;
+   });
 
-   connections.erase(std::remove_if(connections.begin(), connections.end(), removeLambda), connections.end());
+   if (it != connections.end()) {
+      onDisconnect(*it);
+      connections.erase(it);
+   }
 }
 
 void SN::Server::shutdown() {
+   if(!moveGuard) return;
    abortHalt();
    {
       std::lock_guard lock(processHandler->guardMutex);
@@ -817,12 +844,13 @@ std::shared_ptr<SN::ServerAsioW> SN::Server::getHandle() {
 }
 
 SN::Server::~Server() {
+   if(!moveGuard) return;
    NCore_Log("server destroy object\n")
    shutdown();
 }
 
 std::shared_ptr<SN::Connection> SN::Server::onAccept(tcp::socket& socket) {
-   return std::make_shared<Connection>(this->getControllerClone(), *this, socket);
+   return std::make_shared<Connection>(this->getControllerClone(), this, socket);
 }
 
 void SN::Server::onEvent(Event evt) {

@@ -37,7 +37,7 @@ namespace SN {
                   raw->stop();
                   NCore_Log("INTER: ")
                }
-               NCore_Log("object handle destroyed\n")
+               NCore_Log("IOContextHandle: handle destroyed\n")
             }
 
             mode = other.mode;
@@ -100,7 +100,7 @@ namespace SN {
 
       IOContextRunner() : mode(Mode::InternalOwned), owned(std::make_unique<std::thread>()), raw(owned.get()) {}
       
-      IOContextRunner(IOContextRunner&& other) noexcept : mode(other.mode), shared(std::move(other.shared)), owned(std::move(other.owned)), raw(other.raw) {
+      IOContextRunner(IOContextRunner&& other) noexcept : mode(other.mode), shared(std::move(other.shared)), owned(std::move(other.owned)), raw(other.raw), threadRunning(other.threadRunning) {
          other.reset();
       }
 
@@ -134,6 +134,7 @@ namespace SN {
       void startThread(asio::io_context* context) {
          if (!threadRunning) {
             threadRunning = true;
+            NCore_Log("started thread\n")
             get() = std::thread([](asio::io_context* context){
                context->run();
                NCore_Log("work done\n")
@@ -143,15 +144,19 @@ namespace SN {
 
       void stopThread() {
          if (threadRunning) {
-            if (get().joinable()) get().join();
+            if (get().joinable()) {
+               get().join();
+               NCore_Log("joined\n")
+            }
             threadRunning = false;
          }
       }
 
       void reset() noexcept {
+         threadRunning = false;
          raw = nullptr;
-         shared.reset();
          owned.reset();
+         shared.reset();
       }
 
       ~IOContextRunner() {
@@ -160,7 +165,7 @@ namespace SN {
                stopThread();
                NCore_Log("INTER: ")
             }
-            NCore_Log("object runner destroyed\n")
+            NCore_Log("IOContextRunner: runner destroyed\n")
          }
       }
 

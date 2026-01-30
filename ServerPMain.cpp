@@ -59,7 +59,7 @@ protected:
 
    std::shared_ptr<SN::Connection> onAccept(tcp::socket &socket) override {
       printServer("client Accepted", getPort(), true);
-      return std::make_shared<SimpleChatConnection>(this->getControllerClone(),*this, socket);
+      return std::make_shared<SimpleChatConnection>(this->getControllerClone(), this, socket);
    }
 
    void onDisconnect(std::shared_ptr<PN::Connection<>> connection) override {

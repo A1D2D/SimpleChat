@@ -7,7 +7,7 @@
 #include "AsioInclude.h"
 #include "NetContextRef.h"
 #include "NetTSQueue.h"
-
+#include "NetOWLock.h"
 
 #define FlagDef(ID) (1LL << ((ID)-1))
 #define HasFlag(flags, flag) (((flags) & (flag)) != 0)
@@ -67,6 +67,8 @@ namespace SN {
 
       void startRead();
       void startWrite();
+      void stopRead();
+      void stopWrite();
       void abortHalt();
       
       void doTick();
@@ -75,6 +77,7 @@ namespace SN {
 
       ~NetStreamAsioW();
 
+      std::atomic<int> state = SNI_OFFLINE;
       SN::IOContextHandle context;
       tcp::socket socket;
       NetStream* parent = nullptr;
@@ -86,7 +89,13 @@ namespace SN {
    public:
       NetStream(SN::IOContextController&& controller, tcp::socket&& socket);
       NetStream(SN::IOContextController&& controller);
-      
+
+      NetStream(const NetStream&) = delete;
+      NetStream& operator=(const NetStream&) = delete;
+
+      NetStream(NetStream&& other) noexcept;
+      NetStream& operator=(NetStream&&) noexcept = delete;
+
       friend class NetStreamAsioW;
 
       void startRead();
@@ -103,7 +112,7 @@ namespace SN {
       SN::IOContextController getControllerClone();
       tcp::socket& getSocket();
       std::shared_ptr<SN::NetStreamAsioW> getHandle();
-      ~NetStream();
+      virtual ~NetStream();
 
    protected:
       virtual void abortHalt();
@@ -117,13 +126,13 @@ namespace SN {
       virtual void onError(Error err, const asio::error_code& ec);
 
    public:
-      std::atomic<int> state = SNI_OFFLINE;
       std::shared_ptr<NetStreamAsioW> processHandler;
 
       SN::IOContextRunner runner;
       std::vector<uint8_t> readBuffer;
       SN::TSQueue<std::vector<uint8_t>> writeQ;
       SN::TSQueue<uint8_t> readQ;
+      SN::MoveGuard moveGuard;
    };
 
    class Client : public NetStream {
@@ -133,6 +142,12 @@ namespace SN {
       Client(SN::IOContextHandle&& handle);
       Client(SN::IOContextRunner&& runner);
       Client(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
+
+      Client(const Client&) = delete;
+      Client& operator=(const Client&) = delete;
+
+      Client(Client&&) noexcept = default;
+      Client& operator=(Client&&) noexcept = delete;
       
 
       void resolve(const std::string& host, uint16_t port);
@@ -164,12 +179,19 @@ namespace SN {
 
    class Connection : public NetStream {
    public:
-      Connection(SN::IOContextController&& context, Server& server, tcp::socket& accepted);
+      Connection(SN::IOContextController&& context, Server* server, tcp::socket& accepted);
+
+      Connection(const Connection&) = delete;
+      Connection& operator=(const Connection&) = delete;
+
+      Connection(Connection&&) noexcept = default;
+      Connection& operator=(Connection&&) noexcept = delete;
 
       void start();
-      Server& getServer();
+      Server* getServer();
 
       void disconnect();
+      friend class Server;
 
    protected:
       virtual void abortHalt() override;
@@ -185,8 +207,7 @@ namespace SN {
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
 
-      Server& server;
-      friend class Server;
+      Server* server;
    };
 
    class ServerAsioW : public std::enable_shared_from_this<SN::ServerAsioW> {
@@ -194,6 +215,7 @@ namespace SN {
       ServerAsioW(SN::IOContextHandle&& context, SN::Server* parent);
 
       void startAccept();
+      void stopAccept();
       void abortHalt();
 
       void doTick();
@@ -201,6 +223,7 @@ namespace SN {
 
       ~ServerAsioW();
 
+      std::atomic<int> state = SNI_OFFLINE;
       SN::IOContextHandle context;
       std::optional<tcp::acceptor> acceptor;
       std::optional<tcp::socket> pendingSocket;
@@ -216,6 +239,12 @@ namespace SN {
       Server(SN::IOContextHandle&& handle);
       Server(SN::IOContextRunner&& runner);
       Server(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
+
+      Server(const Server&) = delete;
+      Server& operator=(const Server&) = delete;
+
+      Server(Server&& other) noexcept;
+      Server& operator=(Server&&) noexcept = delete;
 
       friend class ServerAsioW;
 
@@ -250,13 +279,14 @@ namespace SN {
       virtual void onError(Error err, const asio::error_code& ec);
 
    public:
-      std::atomic<int> state = SNI_OFFLINE;
       std::shared_ptr<ServerAsioW> processHandler;
 
       SN::IOContextRunner runner;
 
       std::vector<std::shared_ptr<Connection>> connections;
       uint16_t port = 0;
+
+      SN::MoveGuard moveGuard;
 
    public:
       static void printServer(std::string&& serverStr, uint16_t port = 0, bool wPort = false);

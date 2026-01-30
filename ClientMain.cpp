@@ -12,14 +12,19 @@ enum ClientCommand {
    CC_Disconnect,
    CC_Exit,
    CC_Message,
-   CC_Test_F
+   SC_Add,
+   SC_Remove,
+   SC_ID,
+   SC_Help
 };
 
 
 class SimpleChatClient : public SN::Client {
 public:
-   using SN::Client::Client;
+   SimpleChatClient(int clientID_) : SN::Client::Client(), clientID(clientID_) {}
 
+   // using SN::Client::Client;
+   int clientID = 0;
 protected:
    void onResolve() override {
       std::cout << "resolve succesfull\n";
@@ -32,7 +37,7 @@ protected:
    }
 
    void onRead() override {
-      std::cout << "Server: ";
+      std::cout << "cID: " << clientID << ", Server: ";
       while (!readQ.empty()) {
          std::cout << readQ.front();
          readQ.pop();
@@ -46,6 +51,7 @@ int main(int argc, const char** argv) {
    std::vector<std::string> args;
    std::string errorMsg;
    ClientCommand cmd;
+   int cCId = 0;
 
    std::unordered_map<std::string, ClientCommand> commands = {
       {"/connect", CC_Connect},
@@ -53,7 +59,11 @@ int main(int argc, const char** argv) {
       {"/stop", CC_Disconnect},
       {"/d", CC_Disconnect},
       {"/e", CC_Exit},
-      {"/exit", CC_Exit}
+      {"/exit", CC_Exit},
+      {"/add", SC_Add},
+      {"/remove", SC_Remove},
+      {"/i", SC_ID},
+      {"/h", SC_Help}
    };
 
    // Colorb::SKY_BLUE.printAnsiStyle();
@@ -61,7 +71,8 @@ int main(int argc, const char** argv) {
    // resetAnsiStyle();
 
    {
-      SimpleChatClient client;
+      std::vector<SimpleChatClient> clients;
+      clients.emplace_back(std::move(SimpleChatClient(clients.size())));
 
       SN::NestedLoop nl;
       for (;;) {
@@ -81,9 +92,64 @@ int main(int argc, const char** argv) {
          } else {
             cmd = it->second;
          }
+         if(clients.size() <= 0 && (cmd != SC_Add && cmd != SC_Help)) {
+            std::cout << "client must be added before using any other command\n";
+            continue;
+         }
          switch (cmd) {
+            case SC_Help: {
+               std::cout <<
+               "Available Commands:""\n""\n"
+               "/connect, /c""\n"
+               "    Connect the client. argument: [ip] [port] to specify the server ip and port.""\n"
+               "    Example: /c localhost 8080""\n""\n"
+               "/stop, /d""\n"
+               "    Stop the running client.""\n"
+               "    Example: /stop""\n""\n"
+               "/exit, /e""\n"
+               "    Exit the program.""\n"
+               "    Example: /exit""\n""\n"
+               "/add""\n"
+               "    Add a client to operate on.""\n"
+               "    Example: /add""\n""\n"
+               "/remove""\n"
+               "    Remove a client from operation.""\n"
+               "    Example: /remove""\n""\n"
+               "/i""\n"
+               "    Set the current operating client by its integer ID.""\n"
+               "    Example: /i 1""\n""\n"
+               "/h""\n"
+               "    Show this help menu.""\n"
+               "    Example: /h""\n";
+               break;
+            }
             case CC_Exit: {
                NL_BREAK(nl, 0);
+            }
+            case SC_Add: {
+               clients.emplace_back(SimpleChatClient(clients.size()));
+               std::cout << "client added now: " << clients.size() << ", currentID: " << cCId << "\n";
+               break;
+            }
+            case SC_Remove: {
+               SimpleChatClient& scc = clients.back();
+               scc.shutdown();
+               clients.pop_back();
+               if(cCId > clients.size()-1) cCId = clients.size()-1;
+               std::cout << "client removed now: " << clients.size() << ", currentID: " << cCId << "\n";
+               break;
+            }
+            case SC_ID: {
+               auto id = StringUtil::parseArg<uint16_t>(args, 0);
+               if(!id) {
+                  std::cerr << "incorrect arg usage\n";
+                  continue;
+               }
+               cCId = *id;
+               if(cCId < 0) cCId = 0;
+               if(cCId > clients.size()-1) cCId = clients.size()-1;
+               std::cout << "client ided now: " << clients.size() << ", currentID: " << cCId << "\n";
+               break;
             }
             case CC_Connect: {
                auto ip = StringUtil::parseArg<std::string>(args, 0);
@@ -94,16 +160,16 @@ int main(int argc, const char** argv) {
                }
 
                SN::Client::printClient("Connecting to Server..", *ip, *port, true);
-               client.resolve(*ip, *port);
+               clients[cCId].resolve(*ip, *port);
                break;
             }
             case CC_Disconnect: {
-               client.disconnect();
+               clients[cCId].disconnect();
                break;
             }
             default: {
                SN::Client::printClient(""+msg);
-               client.send(StringUtil::stringToBytes(msg));
+               clients[cCId].send(StringUtil::stringToBytes(msg));
                break;
             }
          }
@@ -111,7 +177,9 @@ int main(int argc, const char** argv) {
       }
 
 
-      client.shutdown();
+      for (size_t i = 0; i < clients.size(); i++) {
+         clients[i].shutdown();
+      }
    }
    std::cout << "skipped" << std::endl;
    return 0;
