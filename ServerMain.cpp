@@ -59,7 +59,7 @@ protected:
 };
 
 void SimpleChatConnection::onRead() {
-   std::cout << "SID: " << ((SimpleChatServer*)getServer())->severID << ", Client: ";
+   std::cout << "SID: " << getServer<SimpleChatServer>()->severID << ", Client: ";
    while (!readQ.empty()) {
       std::cout << readQ.front();
       readQ.pop();

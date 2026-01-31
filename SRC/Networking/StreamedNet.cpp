@@ -509,10 +509,6 @@ void SN::Connection::start() {
    onStart();
 }
 
-SN::Server* SN::Connection::getServer() {
-   return server;
-}
-
 void SN::Connection::abortHalt() {
    NetStream::abortHalt();
 

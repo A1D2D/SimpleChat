@@ -188,7 +188,11 @@ namespace SN {
       Connection& operator=(Connection&&) noexcept = delete;
 
       void start();
-      Server* getServer();
+
+      template<typename T = SN::Server>
+      T* getServer() {
+         return dynamic_cast<T*>(server);
+      }
 
       void disconnect();
       friend class Server;

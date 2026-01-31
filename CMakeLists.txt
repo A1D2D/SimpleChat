@@ -108,7 +108,7 @@ if(WIN32)
       ws2_32
       mswsock
    )
-   target_compile_definitions(Server PRIVATE ASIO_STANDALONE NetStream_Enable_Log)
+   target_compile_definitions(Server PRIVATE ASIO_STANDALONE) #NetStream_Enable_Log
 
 
    target_link_libraries(ClientPacket PRIVATE
