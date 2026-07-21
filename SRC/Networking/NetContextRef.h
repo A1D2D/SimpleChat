@@ -145,8 +145,13 @@ namespace SN {
       void stopThread() {
          if (threadRunning) {
             if (get().joinable()) {
-               get().join();
-               NCore_Log("joined\n")
+               if(get().get_id() != std::this_thread::get_id()) {
+                  get().join();
+                  NCore_Log("joined\n");
+               } else {
+                  get().detach();
+                  NCore_Log("join avoided bc deadlock\n");
+               }
             }
             threadRunning = false;
          }

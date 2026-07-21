@@ -130,7 +130,6 @@ void SN::NetStreamAsioW::doWrite() {
       }
       parent->onWrite();
 
-      parent->writeQ.pop();
       if (parent->writeQ.empty() || HasFlag(state, SNI_STOP_WRITE_R)) {
          RemoveFlag(state, SNI_IN_WRITE);
          RemoveFlag(state, SNI_STOP_WRITE_R);
@@ -140,7 +139,10 @@ void SN::NetStreamAsioW::doWrite() {
       doWrite();
    };
 
-   asio::async_write(socket, asio::buffer(parent->writeQ.front().data(), parent->writeQ.front().size()), writeLambda);
+   if(!parent->writeQ.empty()) {
+      asio::async_write(socket, asio::buffer(parent->writeQ.front().data(), parent->writeQ.front().size()), writeLambda);
+      parent->writeQ.pop();
+   }
 }
 
 SN::NetStreamAsioW::~NetStreamAsioW() {

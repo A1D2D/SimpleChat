@@ -45,9 +45,9 @@ namespace SN {
          queueData.pop();
       }
       
-   protected:
       mutable std::unique_ptr<std::mutex> queueMutex;
       std::queue<T> queueData;
+      protected:
    };
 }
 

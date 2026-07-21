@@ -18,7 +18,6 @@ enum ClientCommand {
    SC_Help
 };
 
-
 class SimpleChatClient : public SN::Client {
 public:
    SimpleChatClient(int clientID_) : SN::Client::Client(), clientID(clientID_) {}
