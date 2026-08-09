@@ -1,11 +1,13 @@
 #include "SRC/Util/NestedLoops.h"
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "SRC/Networking/StreamedNet.h"
 #include "SRC/Util/StringUtil.h"
 #include <unordered_map>
+#include <thread>
 
 enum ClientCommand {
    CC_Connect,
@@ -24,6 +26,8 @@ public:
 
    // using SN::Client::Client;
    int clientID = 0;
+   std::shared_ptr<std::thread> thread;
+   std::shared_ptr<std::mutex> mutex;
 protected:
    void onResolve() override {
       std::cout << "resolve succesfull\n";
@@ -71,7 +75,23 @@ int main(int argc, const char** argv) {
 
    {
       std::vector<SimpleChatClient> clients;
-      clients.emplace_back(std::move(SimpleChatClient(clients.size())));
+      {
+         SimpleChatClient client(clients.size());
+         client.mutex = std::make_shared<std::mutex>();
+         client.thread = std::make_shared<std::thread>([](asio::io_context* context, std::shared_ptr<std::mutex> mutex){
+            int handlers = 1;
+            while (handlers) {
+               // mutex->lock();
+               // std::cout << "run start\n";
+               context->poll_one();
+               // std::cout << "run end\n";
+               // handlers = context->run();
+               // mutex->unlock();
+            }
+         }, client.getContext()->get().ptr(), client.mutex);
+
+         clients.emplace_back(std::move(client));
+      }
 
       SN::NestedLoop nl;
       for (;;) {
@@ -126,14 +146,25 @@ int main(int argc, const char** argv) {
                NL_BREAK(nl, 0);
             }
             case SC_Add: {
-               clients.emplace_back(SimpleChatClient(clients.size()));
+               SimpleChatClient client(clients.size());
+               client.mutex = std::make_shared<std::mutex>();
+               client.thread = std::make_shared<std::thread>([](asio::io_context* context, std::shared_ptr<std::mutex> mutex){
+                  int handlers = 1;
+                  while (handlers > 0) {
+                     // std::lock_guard<std::mutex> guard(*mutex);
+                     handlers = context->poll();
+                  }
+               }, client.getContext()->get().ptr(), client.mutex);
+
+               clients.emplace_back(std::move(client));
                std::cout << "client added now: " << clients.size() << ", currentID: " << cCId << "\n";
                break;
             }
             case SC_Remove: {
                SimpleChatClient& scc = clients.back();
-               scc.shutdown();
+               std::shared_ptr<std::thread> th = scc.thread;
                clients.pop_back();
+               if(th->joinable()) th->join();
                if(cCId > clients.size()-1) cCId = clients.size()-1;
                std::cout << "client removed now: " << clients.size() << ", currentID: " << cCId << "\n";
                break;
@@ -159,7 +190,10 @@ int main(int argc, const char** argv) {
                }
 
                SN::Client::printClient("Connecting to Server..", *ip, *port, true);
+               //TODO: fix lock std::lock_guard<std::mutex> guard(*clients[cCId].mutex);
+               clients[cCId].mutex->lock();
                clients[cCId].resolve(*ip, *port);
+               clients[cCId].mutex->unlock();
                break;
             }
             case CC_Disconnect: {
@@ -174,11 +208,17 @@ int main(int argc, const char** argv) {
          }
          NL_CHECK(nl,0);
       }
+      std::vector<std::shared_ptr<std::thread>> threads;
 
-
-      for (size_t i = 0; i < clients.size(); i++) {
-         clients[i].shutdown();
+      for (auto& client : clients) {
+         if (client.thread) threads.push_back(std::move(client.thread));
       }
+      clients.clear();
+
+      for (auto& thread : threads) {
+         if (thread && thread->joinable()) thread->join();
+      }
+      threads.clear();
    }
    std::cout << "skipped" << std::endl;
    return 0;

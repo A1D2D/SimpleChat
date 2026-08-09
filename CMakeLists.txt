@@ -87,15 +87,19 @@ add_executable(Server
    SRC/Networking/StreamedNet.cpp
 )
 
-add_executable(ClientPacket
-   ClientPMain.cpp
-   SRC/Networking/StreamedNet.cpp
+add_executable(PeerMain
+   PeerMain.cpp
 )
 
-add_executable(ServerPacket
-   ServerPMain.cpp
-   SRC/Networking/StreamedNet.cpp
-)
+# add_executable(ClientPacket
+#    ClientPMain.cpp
+#    SRC/Networking/StreamedNet.cpp
+# )
+
+# add_executable(ServerPacket
+#    ServerPMain.cpp
+#    SRC/Networking/StreamedNet.cpp
+# )
 
 if(WIN32)
    target_link_libraries(Client PRIVATE
@@ -110,16 +114,22 @@ if(WIN32)
    )
    target_compile_definitions(Server PRIVATE ASIO_STANDALONE) #NetStream_Enable_Log
 
-
-   target_link_libraries(ClientPacket PRIVATE
+   target_link_libraries(PeerMain PRIVATE 
       ws2_32
       mswsock
    )
-   target_compile_definitions(ClientPacket PRIVATE ASIO_STANDALONE)
+   target_compile_definitions(PeerMain PRIVATE ASIO_STANDALONE)
 
-   target_link_libraries(ServerPacket PRIVATE 
-      ws2_32
-      mswsock
-   )
-   target_compile_definitions(ServerPacket PRIVATE ASIO_STANDALONE)
+
+   # target_link_libraries(ClientPacket PRIVATE
+   #    ws2_32
+   #    mswsock
+   # )
+   # target_compile_definitions(ClientPacket PRIVATE ASIO_STANDALONE)
+
+   # target_link_libraries(ServerPacket PRIVATE 
+   #    ws2_32
+   #    mswsock
+   # )
+   # target_compile_definitions(ServerPacket PRIVATE ASIO_STANDALONE)
 endif()

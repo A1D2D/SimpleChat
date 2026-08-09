@@ -1,24 +1,23 @@
 #include <iostream>
-#include <thread>
 
 #include "SRC/Util/NestedLoops.h"
 
 #include "SRC/Util/StringUtil.h"
 #include "SRC/Networking/StreamedNet.h"
 
-enum ServerCommand {
-   SC_StartServer,
-   SC_StopServer,
-   SC_Exit,
-   SC_Message,
-   SC_ReqClientCount,
-   SC_Add,
-   SC_Remove,
-   SC_ID,
-   SC_Help
+enum PeerCommand {
+   PC_StartPeer,
+   PC_StopPeer,
+   PC_Exit,
+   PC_Message,
+   PC_ReqEndpointCount,
+   PC_Add,
+   PC_Remove,
+   PC_ID,
+   PC_Help
 };
 
-class SimpleChatPeer;
+class SimpleChatServer;
 
 class SimpleChatConnection : public SN::Connection {
 public:
@@ -37,21 +36,21 @@ protected:
    void onRead() override;
 };
 
-class SimpleChatPeer : public SN::Server {
+class SimpleChatServer : public SN::Server {
 public:
-   SimpleChatPeer(int serverID_) : SN::Server::Server(/*udp:true*/), severID(serverID_) {}
+   SimpleChatServer(int serverID_) : SN::Server::Server(), severID(serverID_) {}
    // using SN::Server::Server;
 
    int severID = 0;
 protected:
    void onStart() override {
       printServer("started", getPort(), true);
-      // startAccept(); ?
+      startAccept();
    }
 
    std::shared_ptr<SN::Connection> onAccept(tcp::socket& socket) override {
       printServer("client Accepted");
-      // return std::make_shared<SimpleChatConnection>(this->getControllerClone(), this, socket); ?
+      return std::make_shared<SimpleChatConnection>(this->getControllerClone(), this, socket);
    }
 
    void onDisconnect(std::shared_ptr<SN::Connection> connection) override {
@@ -60,7 +59,7 @@ protected:
 };
 
 void SimpleChatConnection::onRead() {
-   std::cout << "SID: " << getServer<SimpleChatPeer>()->severID << ", Client: ";
+   std::cout << "SID: " << getServer<SimpleChatServer>()->severID << ", Client: ";
    while (!readQ.empty()) {
       std::cout << readQ.front();
       readQ.pop();
@@ -72,30 +71,30 @@ int main() {
    std::string msg;
    std::vector<std::string> args;
    std::string errorMsg;
-   ServerCommand cmd;
+   PeerCommand cmd;
    int cSId = 0;
 
-   std::unordered_map<std::string, ServerCommand> commands = {
-      {"/server", SC_StartServer},
-      {"/s", SC_StartServer},
-      {"/stop", SC_StopServer},
-      {"/d", SC_StopServer},
-      {"/e", SC_Exit},
-      {"/exit", SC_Exit},
-      {"/rcc", SC_ReqClientCount},
-      {"/add", SC_Add},
-      {"/remove", SC_Remove},
-      {"/i", SC_ID},
-      {"/h", SC_Help}
+   std::unordered_map<std::string, PeerCommand> commands = {
+      {"/server", PC_StartPeer},
+      {"/s", PC_StartPeer},
+      {"/stop", PC_StopPeer},
+      {"/d", PC_StopPeer},
+      {"/e", PC_Exit},
+      {"/exit", PC_Exit},
+      {"/rcc", PC_ReqEndpointCount},
+      {"/add", PC_Add},
+      {"/remove", PC_Remove},
+      {"/i", PC_ID},
+      {"/h", PC_Help}
    };
 
    // Colorb::BRONZE.printAnsiStyle();
-   std::cout << "SimpleChat: Peer\n";
+   std::cout << "SimpleChat: Server\n";
    // resetAnsiStyle();
    
    {
-      std::vector<SimpleChatPeer> servers;
-      servers.emplace_back(std::move(SimpleChatPeer(servers.size())));
+      std::vector<SimpleChatServer> servers;
+      servers.emplace_back(std::move(SimpleChatServer(servers.size())));
 
       SN::NestedLoop nl;
       for (;;) {
@@ -109,16 +108,16 @@ int main() {
          if (it == commands.end()) {
             // std::cout << "Unknown command\n";
             // continue;
-            cmd = SC_Message;
+            cmd = PC_Message;
          } else {
             cmd = it->second;
          }
-         if(servers.size() <= 0 && (cmd != SC_Add && cmd != SC_Help)) {
+         if(servers.size() <= 0 && (cmd != PC_Add && cmd != PC_Help)) {
             std::cout << "server must be added before using any other command\n";
             continue;
          }
          switch (cmd) {
-            case SC_Help: {
+            case PC_Help: {
                std::cout <<
                "Available Commands:""\n""\n"
                "/server, /s""\n"
@@ -147,23 +146,23 @@ int main() {
                "    Example: /h""\n";
                break;
             }
-            case SC_Exit: {
+            case PC_Exit: {
                NL_BREAK(nl, 0);
             }
-            case SC_Add: {
-               servers.emplace_back(SimpleChatPeer(servers.size()));
+            case PC_Add: {
+               servers.emplace_back(SimpleChatServer(servers.size()));
                std::cout << "server added now: " << servers.size() << ", currentID: " << cSId << "\n";
                break;
             }
-            case SC_Remove: {
-               SimpleChatPeer& scs = servers.back();
+            case PC_Remove: {
+               SimpleChatServer& scs = servers.back();
                scs.shutdown();
                servers.pop_back();
                if(cSId > servers.size()-1) cSId = servers.size()-1;
                std::cout << "server removed now: " << servers.size() << ", currentID: " << cSId << "\n";
                break;
             }
-            case SC_ID: {
+            case PC_ID: {
                auto id = StringUtil::parseArg<uint16_t>(args, 0);
                if(!id) {
                   std::cerr << "incorrect arg usage\n";
@@ -175,7 +174,7 @@ int main() {
                std::cout << "server ided now: " << servers.size() << ", currentID: " << cSId << "\n";
                break;
             }
-            case SC_StartServer: {
+            case PC_StartServer: {
                auto port = StringUtil::parseArg<uint16_t>(args, 0);
                if(!port) {
                   std::cerr << "incorrect arg usage\n";
@@ -183,16 +182,16 @@ int main() {
                }
 
                servers[cSId].start(*port);
-               SimpleChatPeer::printServer("Server Created..", servers[cSId].getPort(), true);
+               SimpleChatServer::printServer("Server Created..", servers[cSId].getPort(), true);
                break;
             }
-            case SC_StopServer: {
+            case PC_StopServer: {
                servers[cSId].close();
-               SimpleChatPeer::printServer("server closed");
+               SimpleChatServer::printServer("server closed");
                break;
             }
-            case SC_ReqClientCount: {
-               SimpleChatPeer& scs = servers[cSId];
+            case PC_ReqClientCount: {
+               SimpleChatServer& scs = servers[cSId];
                auto lifeTGuard = scs.getHandle();
                asio::post(*scs.getContext(), [&, msg, lifeTGuard]() {
                   std::scoped_lock lock(lifeTGuard->guardMutex);
@@ -203,8 +202,8 @@ int main() {
                break;
             }
             default: {
-               SimpleChatPeer::printServer(""+msg);
-               SimpleChatPeer& scs = servers[cSId];
+               SimpleChatServer::printServer(""+msg);
+               SimpleChatServer& scs = servers[cSId];
                auto lifeTGuard = scs.getHandle();
                asio::post(*scs.getContext(), [&, msg, lifeTGuard]() {
                   std::scoped_lock lock(lifeTGuard->guardMutex);

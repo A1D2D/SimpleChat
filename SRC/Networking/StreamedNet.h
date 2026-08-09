@@ -3,11 +3,10 @@
 
 #include <memory>
 #include <string>
+#include <queue>
 
 #include "AsioInclude.h"
 #include "NetContextRef.h"
-#include "NetTSQueue.h"
-#include "NetOWLock.h"
 
 #define FlagDef(ID) (1LL << ((ID)-1))
 #define HasFlag(flags, flag) (((flags) & (flag)) != 0)
@@ -29,6 +28,11 @@ using asio::ip::tcp;
 #define SNI_STOP_ACCEPT_R 256
 
 namespace SN {
+   enum class NetworkMode {
+      TCP,
+      UDP
+   };
+
    enum class Event {
       OnStart,
       Aborted,
@@ -71,7 +75,6 @@ namespace SN {
       void stopWrite();
       void abortHalt();
       
-      void doTick();
       void doRead();
       void doWrite();
 
@@ -81,20 +84,19 @@ namespace SN {
       SN::IOContextHandle context;
       tcp::socket socket;
       NetStream* parent = nullptr;
-      std::recursive_mutex guardMutex;
       asio::error_code ec;
    };
 
    class NetStream {
    public:
-      NetStream(SN::IOContextController&& controller, tcp::socket&& socket);
-      NetStream(SN::IOContextController&& controller);
+      NetStream(SN::IOContextHandle&& context, tcp::socket&& socket);
+      NetStream(SN::IOContextHandle&& context);
 
       NetStream(const NetStream&) = delete;
       NetStream& operator=(const NetStream&) = delete;
 
       NetStream(NetStream&& other) noexcept;
-      NetStream& operator=(NetStream&&) noexcept = delete;
+      NetStream& operator=(NetStream&&) noexcept;
 
       friend class NetStreamAsioW;
 
@@ -107,10 +109,8 @@ namespace SN {
       void disconnect();
       void shutdown();
 
-      SN::IOContextHandle& getContext();
-      SN::IOContextRunner& getRunner();
-      SN::IOContextController getControllerClone();
-      tcp::socket& getSocket();
+      std::optional<std::reference_wrapper<SN::IOContextHandle>> getContext();
+      std::optional<std::reference_wrapper<tcp::socket>> getSocket();
       std::shared_ptr<SN::NetStreamAsioW> getHandle();
       virtual ~NetStream();
 
@@ -120,34 +120,29 @@ namespace SN {
       virtual void onRead() {}
       virtual void onWrite() {}
       virtual void onDisconnect() {}
-      virtual void onTick() {}
 
       virtual void onEvent(Event evt);
       virtual void onError(Error err, const asio::error_code& ec);
 
    public:
       std::shared_ptr<NetStreamAsioW> processHandler;
+      std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> workGuard;
 
-      SN::IOContextRunner runner;
       std::vector<uint8_t> readBuffer;
-      SN::TSQueue<std::vector<uint8_t>> writeQ;
-      SN::TSQueue<uint8_t> readQ;
-      SN::MoveGuard moveGuard;
+      std::queue<std::vector<uint8_t>> writeQ;
+      std::queue<uint8_t> readQ;
    };
 
    class Client : public NetStream {
    public:
       Client();
-      Client(SN::IOContextController&& controller);
-      Client(SN::IOContextHandle&& handle);
-      Client(SN::IOContextRunner&& runner);
-      Client(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
+      Client(SN::IOContextHandle&& context);
 
       Client(const Client&) = delete;
       Client& operator=(const Client&) = delete;
 
       Client(Client&&) noexcept = default;
-      Client& operator=(Client&&) noexcept = delete;
+      Client& operator=(Client&&) noexcept = default;
       
 
       void resolve(const std::string& host, uint16_t port);
@@ -164,7 +159,6 @@ namespace SN {
       virtual void onRead() override {}
       virtual void onWrite() override {}
       virtual void onDisconnect() override {}
-      virtual void onTick() override {}
 
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
@@ -179,7 +173,7 @@ namespace SN {
 
    class Connection : public NetStream {
    public:
-      Connection(SN::IOContextController&& context, Server* server, tcp::socket& accepted);
+      Connection(SN::IOContextHandle&& context, Server* server, tcp::socket& accepted);
 
       Connection(const Connection&) = delete;
       Connection& operator=(const Connection&) = delete;
@@ -206,7 +200,6 @@ namespace SN {
       virtual void onRead() override {}
       virtual void onWrite() override {}
       virtual void onDisconnect() override {}
-      virtual void onTick() override {}
 
       virtual void onEvent(Event evt) override;
       virtual void onError(Error err, const asio::error_code& ec) override;
@@ -222,7 +215,6 @@ namespace SN {
       void stopAccept();
       void abortHalt();
 
-      void doTick();
       void doAccept();
 
       ~ServerAsioW();
@@ -232,17 +224,13 @@ namespace SN {
       std::optional<tcp::acceptor> acceptor;
       std::optional<tcp::socket> pendingSocket;
       SN::Server* parent = nullptr;
-      std::recursive_mutex guardMutex;
       asio::error_code ec;
    };
 
    class Server {
    public:
       Server();
-      Server(SN::IOContextController&& controller);
-      Server(SN::IOContextHandle&& handle);
-      Server(SN::IOContextRunner&& runner);
-      Server(SN::IOContextHandle&& handle, SN::IOContextRunner&& runner);
+      Server(SN::IOContextHandle&& context);
 
       Server(const Server&) = delete;
       Server& operator=(const Server&) = delete;
@@ -261,8 +249,6 @@ namespace SN {
       void shutdown();
       
       SN::IOContextHandle& getContext();
-      SN::IOContextRunner& getRunner();
-      SN::IOContextController getControllerClone();
       std::optional<tcp::acceptor>& getAcceptor();
       std::optional<tcp::socket>& getPending();
       uint16_t getPort();
@@ -276,7 +262,6 @@ namespace SN {
       virtual std::shared_ptr<Connection> onAccept(tcp::socket& socket);
       virtual void onStart() { startAccept(); }
 
-      virtual void onTick() {}
       virtual void onDisconnect(std::shared_ptr<Connection> connection) {}
 
       virtual void onEvent(Event evt);
@@ -285,12 +270,8 @@ namespace SN {
    public:
       std::shared_ptr<ServerAsioW> processHandler;
 
-      SN::IOContextRunner runner;
-
       std::vector<std::shared_ptr<Connection>> connections;
       uint16_t port = 0;
-
-      SN::MoveGuard moveGuard;
 
    public:
       static void printServer(std::string&& serverStr, uint16_t port = 0, bool wPort = false);
