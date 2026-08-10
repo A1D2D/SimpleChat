@@ -20,41 +20,13 @@ enum ClientCommand {
    SC_Help
 };
 
-class SimpleChatClient : public SN::Client {
-public:
-   SimpleChatClient(int clientID_) : SN::Client::Client(), clientID(clientID_) {}
 
-   // using SN::Client::Client;
-   int clientID = 0;
-   std::shared_ptr<std::thread> thread;
-   std::shared_ptr<std::mutex> mutex;
-protected:
-   void onResolve() override {
-      std::cout << "resolve succesfull\n";
-      connect();
-   }
-
-   void onConnect() override {
-      std::cout << "connect succesfull\n";
-      startRead();
-   }
-
-   void onRead() override {
-      std::cout << "cID: " << clientID << ", Server: ";
-      while (!readQ.empty()) {
-         std::cout << readQ.front();
-         readQ.pop();
-      }
-      std::cout << "\n";
-   }
-};
 
 int main(int argc, const char** argv) {
    std::string msg;
    std::vector<std::string> args;
    std::string errorMsg;
    ClientCommand cmd;
-   int cCId = 0;
 
    std::unordered_map<std::string, ClientCommand> commands = {
       {"/connect", CC_Connect},
@@ -69,30 +41,9 @@ int main(int argc, const char** argv) {
       {"/h", SC_Help}
    };
 
-   // Colorb::SKY_BLUE.printAnsiStyle();
    std::cout << "SimpleChat: Client\n";
-   // resetAnsiStyle();
 
    {
-      std::vector<SimpleChatClient> clients;
-      {
-         SimpleChatClient client(clients.size());
-         client.mutex = std::make_shared<std::mutex>();
-         client.thread = std::make_shared<std::thread>([](asio::io_context* context, std::shared_ptr<std::mutex> mutex){
-            int handlers = 1;
-            while (handlers) {
-               // mutex->lock();
-               // std::cout << "run start\n";
-               context->poll_one();
-               // std::cout << "run end\n";
-               // handlers = context->run();
-               // mutex->unlock();
-            }
-         }, client.getContext()->get().ptr(), client.mutex);
-
-         clients.emplace_back(std::move(client));
-      }
-
       SN::NestedLoop nl;
       for (;;) {
          std::getline(std::cin, msg);
@@ -110,10 +61,6 @@ int main(int argc, const char** argv) {
             cmd = CC_Message;
          } else {
             cmd = it->second;
-         }
-         if(clients.size() <= 0 && (cmd != SC_Add && cmd != SC_Help)) {
-            std::cout << "client must be added before using any other command\n";
-            continue;
          }
          switch (cmd) {
             case SC_Help: {
@@ -146,39 +93,15 @@ int main(int argc, const char** argv) {
                NL_BREAK(nl, 0);
             }
             case SC_Add: {
-               SimpleChatClient client(clients.size());
-               client.mutex = std::make_shared<std::mutex>();
-               client.thread = std::make_shared<std::thread>([](asio::io_context* context, std::shared_ptr<std::mutex> mutex){
-                  int handlers = 1;
-                  while (handlers > 0) {
-                     // std::lock_guard<std::mutex> guard(*mutex);
-                     handlers = context->poll();
-                  }
-               }, client.getContext()->get().ptr(), client.mutex);
-
-               clients.emplace_back(std::move(client));
-               std::cout << "client added now: " << clients.size() << ", currentID: " << cCId << "\n";
+               //TODO: for dev removed
                break;
             }
             case SC_Remove: {
-               SimpleChatClient& scc = clients.back();
-               std::shared_ptr<std::thread> th = scc.thread;
-               clients.pop_back();
-               if(th->joinable()) th->join();
-               if(cCId > clients.size()-1) cCId = clients.size()-1;
-               std::cout << "client removed now: " << clients.size() << ", currentID: " << cCId << "\n";
+               //TODO: for dev removed
                break;
             }
             case SC_ID: {
-               auto id = StringUtil::parseArg<uint16_t>(args, 0);
-               if(!id) {
-                  std::cerr << "incorrect arg usage\n";
-                  continue;
-               }
-               cCId = *id;
-               if(cCId < 0) cCId = 0;
-               if(cCId > clients.size()-1) cCId = clients.size()-1;
-               std::cout << "client ided now: " << clients.size() << ", currentID: " << cCId << "\n";
+               //TODO: for dev removed
                break;
             }
             case CC_Connect: {
@@ -189,36 +112,22 @@ int main(int argc, const char** argv) {
                   continue;
                }
 
-               SN::Client::printClient("Connecting to Server..", *ip, *port, true);
-               //TODO: fix lock std::lock_guard<std::mutex> guard(*clients[cCId].mutex);
-               clients[cCId].mutex->lock();
-               clients[cCId].resolve(*ip, *port);
-               clients[cCId].mutex->unlock();
+               std::cout << "Connecting to Server.." << " ip:" << *ip << " port:" << *port << std::endl;
+               //TODO: connect
                break;
             }
             case CC_Disconnect: {
-               clients[cCId].disconnect();
+               //TODO: disconnect
                break;
             }
             default: {
-               SN::Client::printClient(""+msg);
-               clients[cCId].send(StringUtil::stringToBytes(msg));
+               std::cout << "sending message: " << msg << std::endl;
+               //TODO: send
                break;
             }
          }
          NL_CHECK(nl,0);
       }
-      std::vector<std::shared_ptr<std::thread>> threads;
-
-      for (auto& client : clients) {
-         if (client.thread) threads.push_back(std::move(client.thread));
-      }
-      clients.clear();
-
-      for (auto& thread : threads) {
-         if (thread && thread->joinable()) thread->join();
-      }
-      threads.clear();
    }
    std::cout << "skipped" << std::endl;
    return 0;

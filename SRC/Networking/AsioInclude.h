@@ -17,6 +17,5 @@
 #include <asio/ts/internet.hpp>
 #include <iostream>
 
-using asio::ip::tcp;
 
 #endif //NCORE_ASIOINCLUDE_H
