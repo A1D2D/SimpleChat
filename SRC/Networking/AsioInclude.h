@@ -17,5 +17,7 @@
 #include <asio/ts/internet.hpp>
 #include <iostream>
 
+using asio::ip::tcp;
+using asio::ip::udp;
 
 #endif //NCORE_ASIOINCLUDE_H

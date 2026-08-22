@@ -79,6 +79,7 @@ link_directories(
 
 add_executable(Client
    ClientMain.cpp
+   SRC/Networking/StreamedNet.cpp
 )
 
 add_executable(Server

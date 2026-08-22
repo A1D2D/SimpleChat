@@ -39,10 +39,11 @@ int main() {
       {"/h", SC_Help}
    };
 
-   std::cout << "SimpleChat: Peer\n";
+   std::cout << "SimpleChat: Server\n";
    
    {
       SN::NestedLoop nl;
+
       for (;;) {
          std::getline(std::cin, msg);
          args = StringUtil::split(msg, " ");
