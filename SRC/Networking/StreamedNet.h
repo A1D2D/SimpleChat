@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <mutex>
+#include <queue>
 
 #include "AsioInclude.h"
 
@@ -71,6 +72,12 @@ namespace SN {
       InvalidAddress
    };
 
+   template<NetworkMode Mode>
+   class Client;
+
+   template<NetworkMode Mode>
+   class Server;
+
    class Context {
    private:
       using CallbackPtr = std::shared_ptr<std::function<void()>>;
@@ -101,8 +108,9 @@ namespace SN {
       std::shared_ptr<State> state;
 
    public:
-
       friend class Resolver;
+      friend class Client<NetworkMode::TCP>;
+      friend class Client<NetworkMode::UDP>;
    };
 
    class Context::UsageGuard {
@@ -174,11 +182,12 @@ namespace SN {
 
       template<NetworkMode Mode>
       void resolve(const std::string& host, uint16_t port);
-      void doTick();
+
+      void startTick();
       void stopTick();
 
-      virtual void onTcpResolve(tcp::resolver::results_type resultEndpoints) {}
-      virtual void onUdpResolve(udp::resolver::results_type resultEndpoints) {}
+      virtual void onTcpResolve(std::vector<tcp::endpoint> resultEndpoints) {}
+      virtual void onUdpResolve(std::vector<udp::endpoint> resultEndpoints) {}
       virtual void onTick() {}
 
    private:
@@ -186,12 +195,24 @@ namespace SN {
       Context context;
    };
 
-   template<NetworkMode Mode>
-   class Client;
-
    //TCP
    template<>
    class Client<NetworkMode::TCP> {
+   private:
+      struct State {
+         State() = delete;
+         State(Client* resolverPtr, Context context) : reference(resolverPtr), socket(context.state->io), usageGuard(context), readBuffer(20*1024) {}
+
+         std::recursive_mutex mutex;
+         Client* reference;
+         tcp::socket socket;
+         Context::UsageGuard usageGuard;
+         std::optional<Context::Callback> callback;
+         std::vector<uint8_t> readBuffer;
+         std::queue<std::vector<uint8_t>> writeQueue;
+         bool reading = false;
+         bool writing = false;
+      };
    public:
       Client();
       Client(Context context);
@@ -205,17 +226,96 @@ namespace SN {
       void setContext(Context context);
       Context getContext() const;
 
-      std::vector<tcp::endpoint> endpoints;
+      void connect(std::vector<tcp::endpoint> endpoints);
+      void send(const std::vector<uint8_t>& msg);
+      void disconnect();
+
+      void startRead();
+      void startWrite();
+      void startTick();
+      void stopRead();
+      void stopWrite();
+      void stopTick();
+
+      virtual void onConnect() {}
+      virtual void onRead(std::vector<uint8_t> msg) {}
+      virtual void onWrite() {}
+      virtual void onDisconnect() {}
+      virtual void onTick() {}
 
    private:
-      std::shared_ptr<std::recursive_mutex> mutex;
-      std::shared_ptr<Client*> reference;
-      std::shared_ptr<tcp::socket> socket;
+      void doRead();
+      void doWrite();
+
+      std::shared_ptr<State> state;
       Context context;
    };
 
-   template<NetworkMode Mode>
-   class Server;
+   //UDP
+   template<>
+   class Client<NetworkMode::UDP> {
+   private:
+      struct State {
+         State() = delete;
+         State(Client* resolverPtr, Context context) : reference(resolverPtr), socket(context.state->io), usageGuard(context), readBuffer(20*1024) {}
+
+         std::recursive_mutex mutex;
+         Client* reference;
+         udp::socket socket;
+         Context::UsageGuard usageGuard;
+         std::optional<Context::Callback> callback;
+         std::vector<uint8_t> readBuffer;
+         std::queue<std::vector<uint8_t>> writeQueue;
+         bool reading = false;
+         bool writing = false;
+      };
+   public:
+      Client();
+      Client(Context context);
+
+      Client(Client&& other) noexcept;
+      Client& operator=(Client&& other) noexcept;
+
+      void shutdown();
+      ~Client();
+
+      void setContext(Context context);
+      Context getContext() const;
+
+      void connect(std::vector<udp::endpoint> endpoints);
+      void send(const std::vector<uint8_t>& msg);
+      void disconnect();
+
+      void startRead();
+      void startWrite();
+      void startTick();
+      void stopRead();
+      void stopWrite();
+      void stopTick();
+
+      virtual void onConnect() {}
+      virtual void onRead(std::vector<uint8_t> msg) {}
+      virtual void onWrite() {}
+      virtual void onDisconnect() {}
+      virtual void onTick() {}
+
+   private:
+      void doRead();
+      void doWrite();
+
+      std::shared_ptr<State> state;
+      Context context;
+   };
+
+
+   //TCP
+   template<>
+   class Server<NetworkMode::TCP> {
+   private:
+      struct State {
+         
+      };
+   };
 }
 
 #endif // ~NCORE_STREAMED_NET_H

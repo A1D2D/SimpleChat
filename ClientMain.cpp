@@ -9,10 +9,6 @@
 #include <unordered_map>
 #include <thread>
 
-class MinimalResolver;
-
-MinimalResolver* res;
-
 enum ClientCommand {
    CC_Connect,
    CC_Disconnect,
@@ -24,93 +20,48 @@ enum ClientCommand {
    SC_Help
 };
 
-class FullResolver : public SN::Resolver {
+class CustomClient : public SN::Client<SN::NetworkMode::UDP> {
 public:
-   FullResolver() : SN::Resolver(), running(std::make_shared<std::atomic_bool>(true)) {
-      setContext(context);
-
-      th = std::make_unique<std::thread>([ctx = context, run = running]() mutable {
-         while (run->load() && ctx.usage()) {
-            ctx.poll();
-         }
-      });
+   CustomClient(SN::Context context) : SN::Client<SN::NetworkMode::UDP>(context) {
    }
 
-   FullResolver(FullResolver&& other) noexcept : SN::Resolver(std::move(other)), context(std::move(other.context)), th(std::move(other.th)), mutex(std::move(other.mutex)), running(std::move(other.running)) {}
-
-   FullResolver& operator=(FullResolver&& other) noexcept {
-      if (this == &other) return *this;
-
-      running->store(false);
-      if (th && th->joinable()) th->join();
-
-      SN::Resolver::operator=(std::move(other));
-      context = std::move(other.context);
-      th = std::move(other.th);
-      running = std::move(running);
-
-      return *this;
+   void onConnect() override {
+      std::cout << "connected\n";
+      startRead();
    }
 
-   ~FullResolver() {
-      running->store(false);
-      if (th && th->joinable()) th->join();
+   void onRead(std::vector<uint8_t> msg) override {
+      std::string text(msg.begin(), msg.end());
+      std::cout << text << "\n";
    }
-
-   void onTcpResolve(tcp::resolver::results_type resultEndpoints) override {
-      std::cout << "Resolved endpoints: \n";
-      for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it) {
-         tcp::endpoint endpoint = it->endpoint();
-         std::cout << "tcp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
-      }
-   }
-
-   void onUdpResolve(udp::resolver::results_type resultEndpoints) override {
-      std::cout << "Resolved endpoints: \n";
-      for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it) {
-         udp::endpoint endpoint = it->endpoint();
-         std::cout << "udp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
-      }
-   }
-
-private:
-   SN::Context context;
-   std::unique_ptr<std::thread> th;
-   std::unique_ptr<std::mutex> mutex;
-   std::shared_ptr<std::atomic_bool> running;
 };
 
-class MinimalResolver : public SN::Resolver {
+class CustomResolver : public SN::Resolver {
 public:
-   int counter = 0;
+   CustomResolver(SN::Context context, std::shared_ptr<CustomClient> clientPtr_) : SN::Resolver(context), clientPtr(clientPtr_) {}
 
-   MinimalResolver(SN::Context context) : SN::Resolver(context) {}
+   // void onTcpResolve(std::vector<tcp::endpoint> resultEndpoints) override {
+   //    if(!clientPtr) return;
+   //    std::cout << "connecting to found endpoints\n";
+   //    for (auto endpoint: resultEndpoints) {
+   //       std::cout << "tcp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
+   //    }
+   //    clientPtr->connect(resultEndpoints);
+   // }
 
-   void onTcpResolve(tcp::resolver::results_type resultEndpoints) override {
-      std::cout << "Resolved endpoints: \n";
-      for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it) {
-         tcp::endpoint endpoint = it->endpoint();
-         std::cout << "tcp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
-      }
-      delete res;
-      res = nullptr;
-   }
-
-   void onUdpResolve(udp::resolver::results_type resultEndpoints) override {
-      std::cout << "Resolved endpoints: \n";
-      for (auto it = resultEndpoints.begin(); it != resultEndpoints.end(); ++it) {
-         udp::endpoint endpoint = it->endpoint();
+   void onUdpResolve(std::vector<udp::endpoint> resultEndpoints) override {
+      if(!clientPtr) return;
+      std::cout << "connecting to found endpoints\n";
+      for (auto endpoint: resultEndpoints) {
          std::cout << "udp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
       }
+      std::vector<udp::endpoint> endpoints = {resultEndpoints[1]};
+      clientPtr->connect(endpoints);
    }
 
-   void onTick() override {
-      counter++;
-      if(counter % 5000000 == 0) {
-         std::cout << ".";
-      }
-   }
+   std::shared_ptr<CustomClient> clientPtr;
 };
+
 
 
 
@@ -136,15 +87,18 @@ int main(int argc, const char** argv) {
    std::cout << "SimpleChat: Client\n";
 
    {
+      // std::shared_ptr<std::mutex> contextMutex = std::make_shared<std::mutex>();
       SN::Context context;
+      std::shared_ptr<CustomClient> client = std::make_shared<CustomClient>(context);
+      CustomResolver resolver(context, client);
 
-      res = new MinimalResolver(context);
-
-      std::thread testThread = std::thread([context]() mutable {
-         while (context.usage()) {
+      std::thread th = std::thread([&]() {
+         while(context.usage()) {
+            // std::lock_guard guard(*contextMutex);
             context.poll();
          }
       });
+
 
       SN::NestedLoop nl;
       for (;;) {
@@ -196,12 +150,10 @@ int main(int argc, const char** argv) {
             }
             case SC_Add: {
                //TODO: for dev removed
-               res->doTick();
                break;
             }
             case SC_Remove: {
                //TODO: for dev removed
-               res->stopTick();
                break;
             }
             case SC_ID: {
@@ -217,19 +169,18 @@ int main(int argc, const char** argv) {
                }
 
                std::cout << "Connecting to Server..\n" << "ip:" << *ip << " port:" << *port << std::endl;
-               res->resolve<SN::NetworkMode::TCP>(*ip, *port);
-               res->resolve<SN::NetworkMode::UDP>(*ip, *port);
-               //TODO: connect
+               resolver.resolve<SN::NetworkMode::UDP>(*ip, *port);
                break;
             }
             case CC_Disconnect: {
-               delete res;
-               //TODO: disconnect
+               client->disconnect();
                break;
             }
             default: {
                std::cout << "sending message: " << msg << std::endl;
-               //TODO: send
+               std::vector<uint8_t> data(msg.begin(), msg.end());
+               // std::lock_guard guard(*contextMutex);
+               client->send(data);
                break;
             }
          }
