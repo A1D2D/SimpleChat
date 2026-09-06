@@ -20,9 +20,9 @@ enum ClientCommand {
    SC_Help
 };
 
-class CustomClient : public SN::Client<SN::NetworkMode::UDP> {
+class CustomClient : public SN::Client<SN::NetworkMode::TCP> {
 public:
-   CustomClient(SN::Context context) : SN::Client<SN::NetworkMode::UDP>(context) {
+   CustomClient(SN::Context context) : SN::Client<SN::NetworkMode::TCP>(context) {
    }
 
    void onConnect() override {
@@ -36,9 +36,25 @@ public:
    }
 };
 
+class CustomUDPClient : public SN::Client<SN::NetworkMode::UDP> {
+public:
+   CustomUDPClient(SN::Context context) : SN::Client<SN::NetworkMode::UDP>(context) {
+   }
+
+   void onConnect() override {
+      std::cout << "connected\n";
+      startRead();
+   }
+
+   void onRead(std::vector<uint8_t> msg) override {
+      std::string text(msg.begin(), msg.end());
+      std::cout << text << "\n";
+   }
+}; 
+
 class CustomResolver : public SN::Resolver {
 public:
-   CustomResolver(SN::Context context, std::shared_ptr<CustomClient> clientPtr_) : SN::Resolver(context), clientPtr(clientPtr_) {}
+   CustomResolver(SN::Context context, std::shared_ptr<CustomUDPClient> clientPtr_) : SN::Resolver(context), clientPtr(clientPtr_) {}
 
    // void onTcpResolve(std::vector<tcp::endpoint> resultEndpoints) override {
    //    if(!clientPtr) return;
@@ -59,10 +75,8 @@ public:
       clientPtr->connect(endpoints);
    }
 
-   std::shared_ptr<CustomClient> clientPtr;
+   std::shared_ptr<CustomUDPClient> clientPtr;
 };
-
-
 
 
 int main(int argc, const char** argv) {
@@ -89,7 +103,7 @@ int main(int argc, const char** argv) {
    {
       // std::shared_ptr<std::mutex> contextMutex = std::make_shared<std::mutex>();
       SN::Context context;
-      std::shared_ptr<CustomClient> client = std::make_shared<CustomClient>(context);
+      std::shared_ptr<CustomUDPClient> client = std::make_shared<CustomUDPClient>(context);
       CustomResolver resolver(context, client);
 
       std::thread th = std::thread([&]() {

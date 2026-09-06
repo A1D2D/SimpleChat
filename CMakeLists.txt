@@ -84,6 +84,7 @@ add_executable(Client
 
 add_executable(Server
    ServerMain.cpp
+   SRC/Networking/StreamedNet.cpp
 )
 
 if(WIN32)
