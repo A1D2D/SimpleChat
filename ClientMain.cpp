@@ -64,6 +64,7 @@ public:
    //    }
    //    clientPtr->connect(resultEndpoints);
    // }
+   int i = 0;
 
    void onUdpResolve(std::vector<udp::endpoint> resultEndpoints) override {
       if(!clientPtr) return;
@@ -73,6 +74,14 @@ public:
       }
       std::vector<udp::endpoint> endpoints = {resultEndpoints[1]};
       clientPtr->connect(endpoints);
+   }
+
+   void onTick() override {
+      if(i % 1000000 == 0) {
+         std::cout << ".";
+         i = 0;
+      }
+      i++;
    }
 
    std::shared_ptr<CustomUDPClient> clientPtr;
@@ -164,10 +173,12 @@ int main(int argc, const char** argv) {
             }
             case SC_Add: {
                //TODO: for dev removed
+               resolver.startTick();
                break;
             }
             case SC_Remove: {
                //TODO: for dev removed
+               resolver.stopTick();
                break;
             }
             case SC_ID: {

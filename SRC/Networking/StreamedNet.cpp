@@ -43,7 +43,7 @@ namespace SN {
       std::lock_guard lock(state->callbackMutex);
       std::erase_if(state->callbacks, [&](const CallbackPtr& entry) {
          return entry == callback;
-         });
+      });
    }
 
    void Context::poll() {
@@ -221,22 +221,6 @@ namespace SN {
       };
 
       state->udpResolver.async_resolve(host, std::to_string(port), resolveLambda);
-   }
-   
-   void Resolver::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
-   void Resolver::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
    /*~Resolver*/
 
@@ -416,17 +400,6 @@ namespace SN {
       });
    }
 
-   void Client<NetworkMode::TCP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
    void Client<NetworkMode::TCP>::stopRead() {
       if(!state) return;
 
@@ -443,11 +416,6 @@ namespace SN {
          if(!st) return;
          st->writing = false;
       });
-   }
-
-   void Client<NetworkMode::TCP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
    /*~TcpClient*/
 
@@ -627,17 +595,6 @@ namespace SN {
       });
    }
 
-   void Client<NetworkMode::UDP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
    void Client<NetworkMode::UDP>::stopRead() {
       if(!state) return;
 
@@ -654,11 +611,6 @@ namespace SN {
          if(!st) return;
          st->writing = false;
       });
-   }
-
-   void Client<NetworkMode::UDP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
    /*~UdpClient*/
 
@@ -819,17 +771,6 @@ namespace SN {
       });
    }
 
-   void Server<NetworkMode::TCP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
    void Server<NetworkMode::TCP>::stopAccept() {
       if(!state) return;
 
@@ -839,11 +780,6 @@ namespace SN {
       });
    }
 
-   void Server<NetworkMode::TCP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
-   }
-   
    std::shared_ptr<Connection<NetworkMode::TCP>> Server<NetworkMode::TCP>::onAccept(tcp::socket acceptedSocket) {
       return std::make_shared<Connection<NetworkMode::TCP>>(this, std::move(acceptedSocket));
    }
@@ -1019,17 +955,6 @@ namespace SN {
       });
    }
 
-   void Connection<NetworkMode::TCP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
    void Connection<NetworkMode::TCP>::stopRead() {
       if(!state) return;
 
@@ -1046,11 +971,6 @@ namespace SN {
          if(!st) return;
          st->writing = false;
       });
-   }
-
-   void Connection<NetworkMode::TCP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
    /*~TcpConnection*/
 
@@ -1141,6 +1061,27 @@ namespace SN {
       }
    }
 
+   std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> Server<NetworkMode::UDP>::connect(UdpHandle handle, const std::vector<uint8_t>& msg) {
+      if(!state) return nullptr;
+
+      std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> connection = nullptr;
+      for(auto& cIt : state->connections) {
+         if(!cIt || !cIt->state) continue;
+         if(cIt->state->handle.endpoint == handle.endpoint && cIt->state->handle.socket == handle.socket) {
+            connection = cIt;
+            break;
+         }
+      }
+
+      if(!connection) {
+         connection = onConnect(handle, msg);
+         if(!connection) return nullptr;
+         state->connections.emplace_back(connection);
+         connection->start();
+      }
+      return connection;
+   }
+
    void Server<NetworkMode::UDP>::disconnect() {
       if(!state) return;
       state->connections.clear();
@@ -1175,7 +1116,7 @@ namespace SN {
          std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> connection = nullptr;
          for(auto& cIt : st->connections) {
             if(!cIt || !cIt->state) continue;
-            if(cIt->state->handle.endpoint == input->endpoint) {
+            if(cIt->state->handle.endpoint == input->endpoint && cIt->state->handle.socket == socket.get()) {
                connection = cIt;
                break;
             }
@@ -1226,22 +1167,6 @@ namespace SN {
             st->reference->doRead(socket);
          }
       });
-   }
-
-   void Server<NetworkMode::UDP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-   
-   void Server<NetworkMode::UDP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
 
    std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> Server<NetworkMode::UDP>::onAccept(UdpHandle handle, std::vector<uint8_t> msg) {
@@ -1381,17 +1306,6 @@ namespace SN {
       });
    }
 
-   void Connection<NetworkMode::UDP>::startTick() {
-      if(!state || state->callback) return;
-      state->callback.emplace(Context::Callback(context, [st = state](){
-         if(!st) return;
-
-         std::lock_guard guard(st->mutex);
-         if (!st->reference) return;
-         st->reference->onTick();
-      }));
-   }
-
    void Connection<NetworkMode::UDP>::stopWrite() {
       if(!state) return;
 
@@ -1399,11 +1313,6 @@ namespace SN {
          if(!st) return;
          st->writing = false;
       });
-   }
-   
-   void Connection<NetworkMode::UDP>::stopTick() {
-      if(!state || !state->callback) return;
-      state->callback.reset();
    }
    /*~UdpConnection*/
 }
