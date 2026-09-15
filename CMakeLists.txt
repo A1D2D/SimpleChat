@@ -57,6 +57,9 @@ set(EXTERNAL_INCLUDE_PATHS
 #vcpkg:
 # find_package(lib CONFIG REQUIRED)
 
+# Test
+enable_testing()
+
 # static build
 if(BUILD_STATIC_EXECUTEABLE MATCHES ON) 
    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -87,6 +90,11 @@ add_executable(Server
    SRC/Networking/StreamedNet.cpp
 )
 
+add_executable(Tests
+   Test/main.cpp
+   SRC/Networking/StreamedNet.cpp
+)
+
 if(WIN32)
    target_link_libraries(Client PRIVATE
       ws2_32
@@ -94,9 +102,18 @@ if(WIN32)
    )
    target_compile_definitions(Client PRIVATE ASIO_STANDALONE)
 
+   target_link_libraries(Tests PRIVATE
+      ws2_32
+      mswsock
+   )
+   target_compile_definitions(Tests PRIVATE ASIO_STANDALONE)
+
    target_link_libraries(Server PRIVATE 
       ws2_32
       mswsock
    )
    target_compile_definitions(Server PRIVATE ASIO_STANDALONE) #NetStream_Enable_Log
 endif()
+
+add_test(NAME Tests COMMAND Tests)
+

@@ -64,6 +64,15 @@ namespace SN {
    template<NetworkMode Mode>
    class Connection;
 
+   using TCPClient = Client<NetworkMode::TCP>;
+   using UDPClient = Client<NetworkMode::UDP>;
+
+   using TCPServer = Server<NetworkMode::TCP>;
+   using UDPServer = Server<NetworkMode::UDP>;
+
+   using TCPConnection = Connection<NetworkMode::TCP>;
+   using UDPConnection = Connection<NetworkMode::UDP>;
+
    class Context {
    private:
       using CallbackPtr = std::shared_ptr<std::function<void()>>;
@@ -95,12 +104,14 @@ namespace SN {
 
    public:
       friend class Resolver;
-      friend class Client<NetworkMode::TCP>;
-      friend class Client<NetworkMode::UDP>;
-      friend class Server<NetworkMode::TCP>;
-      friend class Server<NetworkMode::UDP>;
-      friend class Connection<NetworkMode::TCP>;
-      friend class Connection<NetworkMode::UDP>;
+      template<typename T>
+      friend class WriteManager;
+      template<NetworkMode Mode>
+      friend class Client;
+      template<NetworkMode Mode>
+      friend class Server;
+      template<NetworkMode Mode>
+      friend class Connection;
    };
 
    class Context::UsageGuard {
@@ -145,7 +156,7 @@ namespace SN {
    };
 
    template<class Owner>
-   class TickMannager {
+   class TickManager {
    public:
       void startTick() {
          auto& owner = static_cast<Owner&>(*this);
@@ -169,11 +180,45 @@ namespace SN {
 
       virtual void onTick() {}
    };
-
    
-   class Resolver : public TickMannager<Resolver> {
+   template<class Owner>
+   class WriteManager {
+   public:
+      void startWrite() {
+         auto& owner = static_cast<Owner&>(*this);
+         auto state = owner.state;
+         if(!state) return;
+
+         asio::post(owner.context.state->io, [st = state]() {
+            if(!st) return;
+            std::lock_guard guard(st->mutex);
+            if (!st->reference || st->writing) return;
+            st->writing = true;
+            st->reference->doWrite();
+         });
+      }
+
+      void stopWrite() {
+         auto& owner = static_cast<Owner&>(*this);
+         auto state = owner.state;
+         if(!state) return;
+
+         asio::post(owner.context.state->io, [st = state]() {
+            if(!st) return;
+            st->writing = false;
+         });
+      }
+
+      virtual void onWrite() {}
+   };
+
+   template<class Owner>
+   class ReadManager {
+   };
+
+   class Resolver : public TickManager<Resolver> {
    private:
-      friend class TickMannager<Resolver>;
+      friend class TickManager<Resolver>;
       struct State {
          State() = delete;
          State(Resolver* resolverPtr, Context context) : reference(resolverPtr), tcpResolver(context.state->io), udpResolver(context.state->io), usageGuard(context) {}
@@ -211,9 +256,10 @@ namespace SN {
 
    //TCP
    template<>
-   class Client<NetworkMode::TCP> : public TickMannager<Client<NetworkMode::TCP>> {
+   class Client<NetworkMode::TCP> : public TickManager<TCPClient>, WriteManager<TCPClient> {
    private:
-      friend class TickMannager<Client<NetworkMode::TCP>>;
+      friend class TickManager<TCPClient>;
+      friend class WriteManager<TCPClient>;
       struct State {
          State() = delete;
          State(Client* clientPtr, Context context) : reference(clientPtr), socket(context.state->io), usageGuard(context), readBuffer(20*1024) {}
@@ -242,17 +288,15 @@ namespace SN {
       Context getContext() const;
 
       void connect(std::vector<tcp::endpoint> endpoints);
+      void connect(tcp::endpoint endpoint) { connect(std::vector<tcp::endpoint>{endpoint}); }
       void send(const std::vector<uint8_t>& msg);
       void disconnect();
 
       void startRead();
-      void startWrite();
       void stopRead();
-      void stopWrite();
 
       virtual void onConnect() {}
       virtual void onRead(std::vector<uint8_t> msg) {}
-      virtual void onWrite() {}
       virtual void onDisconnect() {}
 
    private:
@@ -266,9 +310,10 @@ namespace SN {
 
    //UDP
    template<>
-   class Client<NetworkMode::UDP> : public TickMannager<Client<NetworkMode::UDP>> {
+   class Client<NetworkMode::UDP> : public TickManager<UDPClient>, WriteManager<UDPClient> {
    private:
-      friend class TickMannager<Client<NetworkMode::UDP>>;
+      friend class TickManager<UDPClient>;
+      friend class WriteManager<UDPClient>;
       struct State {
          State() = delete;
          State(Client* clientPtr, Context context) : reference(clientPtr), socket(context.state->io), usageGuard(context), readBuffer(20*1024) {}
@@ -297,17 +342,15 @@ namespace SN {
       Context getContext() const;
 
       void connect(std::vector<udp::endpoint> endpoints);
+      void connect(udp::endpoint endpoint) { connect(std::vector<udp::endpoint>{endpoint}); }
       void send(const std::vector<uint8_t>& msg);
       void disconnect();
 
       void startRead();
-      void startWrite();
       void stopRead();
-      void stopWrite();
 
       virtual void onConnect() {}
       virtual void onRead(std::vector<uint8_t> msg) {}
-      virtual void onWrite() {}
       virtual void onDisconnect() {}
 
    private:
@@ -322,9 +365,9 @@ namespace SN {
 
    //TCP
    template<>
-   class Server<NetworkMode::TCP> : public TickMannager<Server<NetworkMode::TCP>> {
+   class Server<NetworkMode::TCP> : public TickManager<TCPServer> {
    private:
-   friend class TickMannager<Server<NetworkMode::TCP>>;
+      friend class TickManager<TCPServer>;
       struct State {
          State() = delete;
          State(Server* serverPtr, Context context) : reference(serverPtr), usageGuard(context) {}
@@ -332,7 +375,7 @@ namespace SN {
          std::recursive_mutex mutex;
          Server* reference;
          std::vector<std::shared_ptr<tcp::acceptor>> acceptors;
-         std::vector<std::shared_ptr<Connection<NetworkMode::TCP>>> connections;
+         std::vector<std::shared_ptr<TCPConnection>> connections;
          Context::UsageGuard usageGuard;
          std::optional<Context::Callback> callback;
          bool accepting = false;
@@ -349,7 +392,21 @@ namespace SN {
 
       void setContext(Context context);
       Context getContext() const;
-      std::vector<std::shared_ptr<Connection<NetworkMode::TCP>>> getConnections();
+      std::vector<std::shared_ptr<TCPConnection>> getConnections();
+
+      template<typename T>
+      std::vector<std::shared_ptr<T>> getConnections() {
+         if (!state) {};
+
+         std::vector<std::shared_ptr<T>> result;
+         for (auto& connection : state->connections) {
+            auto custom = std::dynamic_pointer_cast<T>(connection);
+
+            if (custom) result.push_back(custom);
+         }
+
+         return result;
+      }
 
       void start(std::vector<tcp::endpoint> endpoints);
       void start(tcp::endpoint endpoint);
@@ -357,14 +414,14 @@ namespace SN {
       void send(const std::vector<uint8_t>& msg);
       void disconnect();
 
-      void startRead();
+      void startAccept();
       void stopAccept();
 
-      virtual void onStart() {}
-      virtual std::shared_ptr<Connection<NetworkMode::TCP>> onAccept(tcp::socket acceptedSocket);
+      virtual void onStart() { startAccept(); }
+      virtual std::shared_ptr<TCPConnection> onAccept(tcp::socket acceptedSocket);
 
    private:
-      void removeConnection(Connection<NetworkMode::TCP>* connection);
+      void removeConnection(TCPConnection* connection);
       void doAccept(std::shared_ptr<tcp::acceptor> acceptor);
 
       std::shared_ptr<State> state;
@@ -376,16 +433,17 @@ namespace SN {
 
    //TCP
    template<>
-   class Connection<NetworkMode::TCP> : public TickMannager<Connection<NetworkMode::TCP>> {
+   class Connection<NetworkMode::TCP> : public TickManager<TCPConnection>, WriteManager<TCPConnection> {
    private:
-      friend class TickMannager<Connection<NetworkMode::TCP>>;
+      friend class TickManager<TCPConnection>;
+      friend class WriteManager<TCPConnection>;
       struct State {
          State() = delete;
          State(Connection* connectionPtr, Context context, tcp::socket socket_) : reference(connectionPtr), socket(std::move(socket_)), usageGuard(context), readBuffer(20*1024) {}
 
          std::recursive_mutex mutex;
          Connection* reference;
-         Server<NetworkMode::TCP>* server;
+         TCPServer* server;
          tcp::socket socket;
          Context::UsageGuard usageGuard;
          std::optional<Context::Callback> callback;
@@ -396,7 +454,7 @@ namespace SN {
       };
    public:
       Connection();
-      Connection(Server<NetworkMode::TCP>* server, tcp::socket socket);
+      Connection(TCPServer* server, tcp::socket socket);
 
       Connection(Connection&& other) noexcept;
       Connection& operator=(Connection&& other) noexcept;
@@ -404,7 +462,7 @@ namespace SN {
       void shutdown();
       ~Connection();
 
-      void setServer(Server<NetworkMode::TCP>* server);
+      void setServer(TCPServer* server);
       void setEnv(Context context, tcp::socket socket);
       Context getContext() const;
 
@@ -413,13 +471,10 @@ namespace SN {
       void disconnect();
 
       void startRead();
-      void startWrite();
       void stopRead();
-      void stopWrite();
 
       virtual void onStart() { startRead(); }
       virtual void onRead(std::vector<uint8_t> msg) {}
-      virtual void onWrite() {}
       virtual void onDisconnect() {}
 
    private:
@@ -434,7 +489,7 @@ namespace SN {
 
    //UDP
    template<>
-   class Server<NetworkMode::UDP> : public TickMannager<Server<NetworkMode::UDP>> {
+   class Server<NetworkMode::UDP> : public TickManager<UDPServer> {
    public:
       struct UdpHandle {
          UdpHandle(udp::endpoint endpoint, udp::socket* socket) : endpoint(endpoint), socket(socket) {}
@@ -443,7 +498,7 @@ namespace SN {
          udp::socket* socket;
       };
    private:
-      friend class TickMannager<Server<NetworkMode::UDP>>;
+      friend class TickManager<UDPServer>;
       struct State {
          State() = delete;
          State(Server* serverPtr, Context context) : reference(serverPtr), usageGuard(context) {}
@@ -451,7 +506,7 @@ namespace SN {
          std::recursive_mutex mutex;
          Server* reference;
          std::vector<std::shared_ptr<udp::socket>> sockets;
-         std::vector<std::shared_ptr<Connection<NetworkMode::UDP>>> connections;
+         std::vector<std::shared_ptr<UDPConnection>> connections;
          Context::UsageGuard usageGuard;
          std::optional<Context::Callback> callback;
          bool reading = false;
@@ -468,7 +523,21 @@ namespace SN {
 
       void setContext(Context context);
       Context getContext() const;
-      std::vector<std::shared_ptr<Connection<NetworkMode::UDP>>> getConnections();
+      std::vector<std::shared_ptr<UDPConnection>> getConnections();
+
+      template<typename T>
+      std::vector<std::shared_ptr<T>> getConnections() {
+         if (!state) {};
+
+         std::vector<std::shared_ptr<T>> result;
+         for (auto& connection : state->connections) {
+            auto custom = std::dynamic_pointer_cast<T>(connection);
+
+            if (custom) result.push_back(custom);
+         }
+
+         return result;
+      }
 
       void start(std::vector<udp::endpoint> endpoints);
       void start(udp::endpoint endpoint);
@@ -484,7 +553,7 @@ namespace SN {
       virtual std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> onAccept(UdpHandle handle, std::vector<uint8_t> msg);
       virtual std::shared_ptr<SN::Connection<SN::NetworkMode::UDP>> onConnect(UdpHandle handle, std::vector<uint8_t> msg) { return onAccept(handle, msg); }
    private:
-      void removeConnection(Connection<NetworkMode::UDP>* connection);
+      void removeConnection(UDPConnection* connection);
       void doRead(std::shared_ptr<udp::socket> socket);
 
       std::shared_ptr<State> state;
@@ -496,17 +565,18 @@ namespace SN {
 
    //UDP
    template<>
-   class Connection<NetworkMode::UDP> : public TickMannager<Connection<NetworkMode::UDP>> {
+   class Connection<NetworkMode::UDP> : public TickManager<UDPConnection>, WriteManager<UDPConnection> {
    private:
-      friend class TickMannager<Connection<NetworkMode::UDP>>;
+      friend class TickManager<UDPConnection>;
+      friend class WriteManager<UDPConnection>;
       struct State {
          State() = delete;
-         State(Connection* connectionPtr, Context context, Server<NetworkMode::UDP>::UdpHandle handle_) : reference(connectionPtr), handle(std::move(handle_)), usageGuard(context) {};
+         State(Connection* connectionPtr, Context context, UDPServer::UdpHandle handle_) : reference(connectionPtr), handle(std::move(handle_)), usageGuard(context) {};
 
          std::recursive_mutex mutex;
          Connection* reference;
-         Server<NetworkMode::UDP>::UdpHandle handle;
-         Server<NetworkMode::UDP>* server;
+         UDPServer::UdpHandle handle;
+         UDPServer* server;
          Context::UsageGuard usageGuard;
          std::optional<Context::Callback> callback;
          std::queue<std::vector<uint8_t>> writeQueue;
@@ -515,7 +585,7 @@ namespace SN {
 
    public:
       Connection();
-      Connection(Server<NetworkMode::UDP>* server, Server<NetworkMode::UDP>::UdpHandle handle);
+      Connection(UDPServer* server, UDPServer::UdpHandle handle);
 
       Connection(Connection&& other) noexcept;
       Connection& operator=(Connection&& other) noexcept;
@@ -523,20 +593,16 @@ namespace SN {
       void shutdown();
       ~Connection();
 
-      void setServer(Server<NetworkMode::UDP>* server);
-      void setEnv(Context context, Server<NetworkMode::UDP>::UdpHandle handle);
+      void setServer(UDPServer* server);
+      void setEnv(Context context, UDPServer::UdpHandle handle);
       Context getContext() const;
 
       void start();
       void send(const std::vector<uint8_t>& msg);
       void disconnect();
 
-      void startWrite();
-      void stopWrite();
-
       virtual void onStart() {}
       virtual void onRead(std::vector<uint8_t> msg) {}
-      virtual void onWrite() {}
       virtual void onDisconnect() {}
 
    private:

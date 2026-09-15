@@ -388,33 +388,12 @@ namespace SN {
       });
    }
 
-   void Client<NetworkMode::TCP>::startWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         std::lock_guard guard(st->mutex);
-         if (!st->reference || st->writing) return;
-         st->writing = true;
-         st->reference->doWrite();
-      });
-   }
-
    void Client<NetworkMode::TCP>::stopRead() {
       if(!state) return;
 
       asio::post(context.state->io, [st = state]() {
          if(!st) return;
          st->reading = false;
-      });
-   }
-
-   void Client<NetworkMode::TCP>::stopWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         st->writing = false;
       });
    }
    /*~TcpClient*/
@@ -583,33 +562,12 @@ namespace SN {
       });
    }
 
-   void Client<NetworkMode::UDP>::startWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         std::lock_guard guard(st->mutex);
-         if (!st->reference || st->writing) return;
-         st->writing = true;
-         st->reference->doWrite();
-      });
-   }
-
    void Client<NetworkMode::UDP>::stopRead() {
       if(!state) return;
 
       asio::post(context.state->io, [st = state]() {
          if(!st) return;
          st->reading = false;
-      });
-   }
-
-   void Client<NetworkMode::UDP>::stopWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         st->writing = false;
       });
    }
    /*~UdpClient*/
@@ -675,7 +633,7 @@ namespace SN {
    }
 
    std::vector<std::shared_ptr<Connection<NetworkMode::TCP>>> Server<NetworkMode::TCP>::getConnections() {
-      if(!state) std::vector<std::shared_ptr<Connection<NetworkMode::TCP>>>();
+      if(!state) {}
       return state->connections;
    }
 
@@ -756,7 +714,7 @@ namespace SN {
       acceptor->async_accept(*socket, accpetLambda);
    }
 
-   void Server<NetworkMode::TCP>::startRead() {
+   void Server<NetworkMode::TCP>::startAccept() {
       if(!state) return;
 
       asio::post(context.state->io, [st = state]() {
@@ -943,33 +901,12 @@ namespace SN {
       });
    }
 
-   void Connection<NetworkMode::TCP>::startWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         std::lock_guard guard(st->mutex);
-         if (!st->reference || st->writing) return;
-         st->writing = true;
-         st->reference->doWrite();
-      });
-   }
-
    void Connection<NetworkMode::TCP>::stopRead() {
       if(!state) return;
 
       asio::post(context.state->io, [st = state]() {
          if(!st) return;
          st->reading = false;
-      });
-   }
-
-   void Connection<NetworkMode::TCP>::stopWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         st->writing = false;
       });
    }
    /*~TcpConnection*/
@@ -1292,27 +1229,6 @@ namespace SN {
 
       state->handle.socket->async_send_to(asio::buffer(state->writeQueue.front().data(), state->writeQueue.front().size()), state->handle.endpoint, writeLambda);
       state->writeQueue.pop();
-   }
-   
-   void Connection<NetworkMode::UDP>::startWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         std::lock_guard guard(st->mutex);
-         if (!st->reference || st->writing) return;
-         st->writing = true;
-         st->reference->doWrite();
-      });
-   }
-
-   void Connection<NetworkMode::UDP>::stopWrite() {
-      if(!state) return;
-
-      asio::post(context.state->io, [st = state]() {
-         if(!st) return;
-         st->writing = false;
-      });
    }
    /*~UdpConnection*/
 }
