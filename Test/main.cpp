@@ -103,7 +103,7 @@ TEST_CASE("Context callback can be removed") {
    SN::Context context;
 
    auto handle = context.addCallback([]() {
-   });
+      });
 
    REQUIRE_FALSE(handle.expired());
 
@@ -123,6 +123,7 @@ public:
    TestClient(Context context) : Client(context) {}
 
    void onConnect() override {
+      startRead();
       connected = true;
    }
 
@@ -199,7 +200,9 @@ public:
 
    TestUDPClient(Context context) : Client(context) {}
 
-   void onConnect() override { connected = true; }
+   void onConnect() override { 
+      connected = true; 
+   }
    void onRead(std::vector<uint8_t> msg) override {
       received = true;
       receivedData = std::move(msg);
@@ -212,8 +215,9 @@ public:
    bool received = false;
    std::vector<uint8_t> receivedData;
 
-   TestUDPConnection(Server<NetworkMode::UDP>* server, UDPServer::UdpHandle handle) 
-       : Connection(server, std::move(handle)) {}
+   TestUDPConnection(Server<NetworkMode::UDP>* server, UDPServer::UdpHandle handle)
+      : Connection(server, std::move(handle)) {
+   }
 
    void onStart() override { started = true; }
    void onRead(std::vector<uint8_t> msg) override {
@@ -239,10 +243,10 @@ public:
       auto connection = std::make_shared<TestUDPConnection>(this, std::move(handle));
       lastConnection = connection;
       clientConnected = true;
-      
+
       // If UDP connect includes an initial message, capture it
       if (!msg.empty()) {
-          connection->onRead(std::move(msg));
+         connection->onRead(std::move(msg));
       }
       return connection;
    }
@@ -266,10 +270,10 @@ TEST_CASE("TCP client sends data to server") {
    client.connect(endpoint);
 
    start = std::chrono::steady_clock::now();
-   while(!(client.connected && server.clientConnected)) {
+   while (!(client.connected && server.clientConnected)) {
       auto elapsed = std::chrono::steady_clock::now() - start;
 
-      if(elapsed >= timeOut) {timedOut = true; break;}
+      if (elapsed >= timeOut) { timedOut = true; break; }
 
       context.poll();
    }
@@ -287,10 +291,10 @@ TEST_CASE("TCP client sends data to server") {
    client.send(message);
 
    start = std::chrono::steady_clock::now();
-   while(connection->receivedData.size() <= 0) {
+   while (connection->receivedData.size() <= 0) {
       auto elapsed = std::chrono::steady_clock::now() - start;
 
-      if(elapsed >= timeOut) {timedOut = true; break;}
+      if (elapsed >= timeOut) { timedOut = true; break; }
 
       context.poll();
    }
@@ -308,7 +312,7 @@ TEST_CASE("TCP Server handles multiple clients") {
    auto timeOut = std::chrono::seconds(5);
    Context context;
    TestServer server(context);
-   
+
    const uint16_t port = 45680;
    auto endpoint = tcp::endpoint(asio::ip::make_address("127.0.0.1"), port);
    server.start(endpoint);
@@ -316,8 +320,8 @@ TEST_CASE("TCP Server handles multiple clients") {
    const int numClients = 3;
    std::vector<std::unique_ptr<TestClient>> clients;
    for (int i = 0; i < numClients; i++) {
-       clients.push_back(std::make_unique<TestClient>(context));
-       clients.back()->connect(endpoint);
+      clients.push_back(std::make_unique<TestClient>(context));
+      clients.back()->connect(endpoint);
    }
 
    auto start = std::chrono::steady_clock::now();
@@ -325,12 +329,12 @@ TEST_CASE("TCP Server handles multiple clients") {
       if (std::chrono::steady_clock::now() - start >= timeOut) { timedOut = true; break; }
       context.poll();
    }
-   
+
    REQUIRE_FALSE(timedOut);
    REQUIRE(server.getConnections().size() == numClients);
 
    for (auto& client : clients) {
-       client->shutdown();
+      client->shutdown();
    }
    server.shutdown();
 }
@@ -341,7 +345,7 @@ TEST_CASE("TCP Client and Server disconnection") {
    Context context;
    TestServer server(context);
    TestClient client(context);
-   
+
    const uint16_t port = 45681;
    auto endpoint = tcp::endpoint(asio::ip::make_address("127.0.0.1"), port);
    server.start(endpoint);
@@ -352,7 +356,7 @@ TEST_CASE("TCP Client and Server disconnection") {
       if (std::chrono::steady_clock::now() - start >= timeOut) { timedOut = true; break; }
       context.poll();
    }
-   
+
    REQUIRE(server.getConnections().size() == 1);
    auto connection = server.getConnections<TestConnection>()[0];
 
@@ -376,7 +380,7 @@ TEST_CASE("Client move semantics maintain connection state") {
    Context context;
    TestServer server(context);
    TestClient client1(context);
-   
+
    const uint16_t port = 45682;
    auto endpoint = tcp::endpoint(asio::ip::make_address("127.0.0.1"), port);
    server.start(endpoint);
@@ -391,12 +395,12 @@ TEST_CASE("Client move semantics maintain connection state") {
       if (std::chrono::steady_clock::now() - start >= timeOut) { timedOut = true; break; }
       context.poll();
    }
-   
+
    std::vector<uint8_t> message = StringUtil::stringToBytes("Moved Data");
    client2.send(message);
 
    auto connection = server.getConnections<TestConnection>()[0];
-   
+
    start = std::chrono::steady_clock::now();
    while (connection->receivedData.empty()) {
       if (std::chrono::steady_clock::now() - start >= timeOut) { timedOut = true; break; }
@@ -413,7 +417,7 @@ TEST_CASE("UDP client sends data to server") {
    Context context;
    TestUDPServer server(context);
    TestUDPClient client(context);
-   
+
    const uint16_t port = 45683;
    auto endpoint = udp::endpoint(asio::ip::make_address("127.0.0.1"), port);
    server.start(endpoint);
@@ -435,3 +439,86 @@ TEST_CASE("UDP client sends data to server") {
    REQUIRE(StringUtil::bytesToString(server.lastConnection->receivedData) == "UDP Test Message");
 }
 
+TEST_CASE("TCP Server handles interleaved connects, disconnects, kicks, and data transfers") {
+   auto timeOut = std::chrono::seconds(10);
+   Context context;
+   TestServer server(context);
+
+   const uint16_t port = 45685;
+   auto endpoint = tcp::endpoint(asio::ip::make_address("127.0.0.1"), port);
+   server.start(endpoint);
+
+   // Helper lambda to cleanly poll the context until a condition is met or it times out
+   auto waitFor = [&](std::function<bool()> condition) {
+      auto start = std::chrono::steady_clock::now();
+      while (!condition()) {
+         if (std::chrono::steady_clock::now() - start >= timeOut) return false;
+         context.poll();
+      }
+      return true;
+   };
+
+   TestClient clientA(context);
+   TestClient clientB(context);
+   TestClient clientC(context);
+
+   // 1. Client A and B connect simultaneously
+   clientA.connect(endpoint);
+   clientB.connect(endpoint);
+   REQUIRE(waitFor([&]() { return server.getConnections().size() == 2; }));
+   REQUIRE(clientA.connected);
+   REQUIRE(clientB.connected);
+
+   // 2. Client A sends data
+   clientA.send(StringUtil::stringToBytes("Msg from A"));
+   REQUIRE(waitFor([&]() {
+      for (auto& c : server.getConnections<TestConnection>()) {
+         if (c->received && StringUtil::bytesToString(c->receivedData) == "Msg from A") return true;
+      }
+      return false;
+      }));
+
+   // 3. Client A disconnects itself WHILE Client C is connecting
+   clientA.disconnect();
+   clientC.connect(endpoint);
+
+   // Verify A drops and C establishes, leaving exactly 2 active connections (B and C)
+   REQUIRE(waitFor([&]() { return clientA.disconnected; }));
+   REQUIRE(waitFor([&]() { return clientC.connected; }));
+   REQUIRE(waitFor([&]() { return server.getConnections().size() == 2; }));
+
+   // 4. Clients B and C send data so we can identify their server-side connection objects
+   clientB.send(StringUtil::stringToBytes("Msg from B"));
+   clientC.send(StringUtil::stringToBytes("Msg from C"));
+
+   REQUIRE(waitFor([&]() {
+      int receivedCount = 0;
+      for (auto& c : server.getConnections<TestConnection>()) {
+         std::string msg = StringUtil::bytesToString(c->receivedData);
+         if (msg == "Msg from B" || msg == "Msg from C") receivedCount++;
+      }
+      return receivedCount == 2;
+   }));
+
+   // 5. Server forcefully kicks Client B based on its received message
+   for (auto& c : server.getConnections<TestConnection>()) {
+      if (StringUtil::bytesToString(c->receivedData) == "Msg from B") {
+         c->disconnect();
+      }
+   }
+
+   // Verify B is kicked and only C remains
+   REQUIRE(waitFor([&]() { return clientB.disconnected; }));
+   REQUIRE(waitFor([&]() { return server.getConnections().size() == 1; }));
+
+   // 6. Client C sends one final message to ensure the server is still processing reads
+   clientC.send(StringUtil::stringToBytes("Final Msg from C"));
+   REQUIRE(waitFor([&]() {
+      auto conns = server.getConnections<TestConnection>();
+      if (conns.empty()) return false;
+      return StringUtil::bytesToString(conns[0]->receivedData) == "Final Msg from C";
+   }));
+
+   clientC.shutdown();
+   server.shutdown();
+}
