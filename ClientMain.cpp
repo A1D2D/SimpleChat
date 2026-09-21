@@ -54,27 +54,27 @@ public:
 
 class CustomResolver : public SN::Resolver {
 public:
-   CustomResolver(SN::Context context, std::shared_ptr<CustomUDPClient> clientPtr_) : SN::Resolver(context), clientPtr(clientPtr_) {}
+   CustomResolver(SN::Context context, std::shared_ptr<CustomClient> clientPtr_) : SN::Resolver(context), clientPtr(clientPtr_) {}
 
-   // void onTcpResolve(std::vector<tcp::endpoint> resultEndpoints) override {
-   //    if(!clientPtr) return;
-   //    std::cout << "connecting to found endpoints\n";
-   //    for (auto endpoint: resultEndpoints) {
-   //       std::cout << "tcp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
-   //    }
-   //    clientPtr->connect(resultEndpoints);
-   // }
-   int i = 0;
-
-   void onUdpResolve(std::vector<udp::endpoint> resultEndpoints) override {
+   void onTcpResolve(std::vector<tcp::endpoint> resultEndpoints) override {
       if(!clientPtr) return;
       std::cout << "connecting to found endpoints\n";
       for (auto endpoint: resultEndpoints) {
-         std::cout << "udp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
+         std::cout << "tcp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
       }
-      std::vector<udp::endpoint> endpoints = {resultEndpoints[1]};
-      clientPtr->connect(endpoints);
+      clientPtr->connect(resultEndpoints);
    }
+   int i = 0;
+
+   // void onUdpResolve(std::vector<udp::endpoint> resultEndpoints) override {
+   //    if(!clientPtr) return;
+   //    std::cout << "connecting to found endpoints\n";
+   //    for (auto endpoint: resultEndpoints) {
+   //       std::cout << "udp: " << endpoint.address().to_string() << ":" << endpoint.port() << '\n';
+   //    }
+   //    std::vector<udp::endpoint> endpoints = {resultEndpoints[1]};
+   //    clientPtr->connect(endpoints);
+   // }
 
    void onTick() override {
       if(i % 1000000 == 0) {
@@ -84,7 +84,7 @@ public:
       i++;
    }
 
-   std::shared_ptr<CustomUDPClient> clientPtr;
+   std::shared_ptr<CustomClient> clientPtr;
 };
 
 
@@ -112,7 +112,7 @@ int main(int argc, const char** argv) {
    {
       // std::shared_ptr<std::mutex> contextMutex = std::make_shared<std::mutex>();
       SN::Context context;
-      std::shared_ptr<CustomUDPClient> client = std::make_shared<CustomUDPClient>(context);
+      std::shared_ptr<CustomClient> client = std::make_shared<CustomClient>(context);
       CustomResolver resolver(context, client);
 
       std::thread th = std::thread([&]() {
@@ -194,7 +194,7 @@ int main(int argc, const char** argv) {
                }
 
                std::cout << "Connecting to Server..\n" << "ip:" << *ip << " port:" << *port << std::endl;
-               resolver.resolve<SN::NetworkMode::UDP>(*ip, *port);
+               resolver.resolve<SN::NetworkMode::TCP>(*ip, *port);
                break;
             }
             case CC_Disconnect: {

@@ -111,7 +111,7 @@ int main() {
 
    {
       SN::Context context;
-      std::shared_ptr<CustomUDPServer> server = std::make_shared<CustomUDPServer>(context);
+      std::shared_ptr<CustomServer> server = std::make_shared<CustomServer>(context);
 
       std::thread th = std::thread([&](){
          while(context.usage()) {
@@ -189,7 +189,7 @@ int main() {
                   std::cerr << "incorrect arg usage\n";
                   continue;
                }
-               server->start(udp::endpoint(udp::v4(), *port));
+               server->start(tcp::endpoint(tcp::v4(), *port));
                std::cout << "Server Created.." << /*port <<*/ std::endl;
                break;
             }
