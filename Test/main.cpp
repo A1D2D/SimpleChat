@@ -1,5 +1,5 @@
-#include "../SRC/Networking/StreamedNet.h"
 #include "../SRC/Util/StringUtil.h"
+#include <StreamedNet.h>
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"

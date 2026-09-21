@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "SRC/Networking/StreamedNet.h"
+#include <StreamedNet.h>
+
 #include "SRC/Util/StringUtil.h"
 #include <unordered_map>
 #include <thread>

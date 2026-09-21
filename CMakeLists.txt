@@ -4,12 +4,13 @@ project(SimpleChat)
 include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # === FETCH_CONTENT ===
 set(LIB_FOLDER_NAME Libraries)
 set(INCLUDE_FOLDER_NAME Include)
 set(LIB_LINK_FOLDER_NAME Lib)
-set(FETCHED_CONTENT_FOLDER_NAME External)
+set(FETCHED_CONTENT_FOLDER_NAME External/Fetch)
 
 #cmake varibales:
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_SOURCE_DIR}/Run)
@@ -42,20 +43,12 @@ endif()
 
 #fetchExternals
 
-# === asio ===
-FetchContent_Declare(
-  asio
-  GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-  GIT_TAG asio-1-30-0
-)
-FetchContent_MakeAvailable(asio)
-
-set(EXTERNAL_INCLUDE_PATHS
-   ${asio_SOURCE_DIR}/asio/include
-)
 
 #vcpkg:
 # find_package(lib CONFIG REQUIRED)
+
+#subdirectory
+add_subdirectory(Libraries/External/NCore)
 
 # Test
 enable_testing()
@@ -82,17 +75,14 @@ link_directories(
 
 add_executable(Client
    ClientMain.cpp
-   SRC/Networking/StreamedNet.cpp
 )
 
 add_executable(Server
    ServerMain.cpp
-   SRC/Networking/StreamedNet.cpp
 )
 
 add_executable(Tests
    Test/main.cpp
-   SRC/Networking/StreamedNet.cpp
 )
 
 if(WIN32)
@@ -100,19 +90,20 @@ if(WIN32)
       ws2_32
       mswsock
    )
-   target_compile_definitions(Client PRIVATE ASIO_STANDALONE)
-
-   target_link_libraries(Tests PRIVATE
-      ws2_32
-      mswsock
-   )
-   target_compile_definitions(Tests PRIVATE ASIO_STANDALONE)
+   target_link_libraries(Client PRIVATE NCore)
 
    target_link_libraries(Server PRIVATE 
       ws2_32
       mswsock
    )
-   target_compile_definitions(Server PRIVATE ASIO_STANDALONE) #NetStream_Enable_Log
+   target_link_libraries(Server PRIVATE NCore)
+   
+   target_link_libraries(Tests PRIVATE
+      ws2_32
+      mswsock
+   )
+   target_link_libraries(Tests PRIVATE NCore)
+   # target_compile_definitions(Tests PRIVATE NetStream_Enable_Log)
 endif()
 
 add_test(NAME Tests COMMAND Tests)

@@ -2,9 +2,9 @@
 #include <thread>
 
 #include "SRC/Util/NestedLoops.h"
-
 #include "SRC/Util/StringUtil.h"
-#include "SRC/Networking/StreamedNet.h"
+
+#include <StreamedNet.h>
 
 enum ServerCommand {
    SC_StartServer,

@@ -1,7 +1,9 @@
 #ifndef NCORE_STRINGUTIL_H
 #define NCORE_STRINGUTIL_H
 
+
 #include <charconv>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>

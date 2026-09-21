@@ -1,0 +1,4 @@
+[submodule "Libraries/External/NCore"]
+	path = Libraries/External/NCore
+	url = https://github.com/A1D2D/NCore.git
+	branch = Dev
