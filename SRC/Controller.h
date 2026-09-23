@@ -117,19 +117,23 @@ public:
    }
 
    void start(uint16_t port, bool tcp = true) {
-      auto tcpV = tcp::v4();
-      auto udpV = udp::v4();
       auto& instance = get();
       if(tcp) {
          if(!instance) instance = std::make_shared<SCTServer>(context);
          auto instPtr = std::dynamic_pointer_cast<SCTServer>(instance);
          if(!instPtr) return;
-         instPtr->start(tcp::endpoint(tcpV, port));
+         instPtr->start({
+            tcp::endpoint(tcp::v4(), port),
+            tcp::endpoint(tcp::v6(), port)
+         });
       } else {
          if(!instance) instance = std::make_shared<SCUServer>(context);
          auto instPtr = std::dynamic_pointer_cast<SCUServer>(instance);
          if(!instPtr) return;
-         instPtr->start(udp::endpoint(udpV, port));
+         instPtr->start({
+            udp::endpoint(udp::v4(), port),
+            udp::endpoint(udp::v6(), port)
+         });
       }
    }
 
@@ -168,9 +172,9 @@ public:
    void disconnect(int clientID) {
       auto instance = get();
       if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
-         if(clientID > server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
       } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
-         if(clientID > server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
       }
    }
 
@@ -198,6 +202,15 @@ public:
          if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
       } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
          if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
+      }
+   }
+
+   void printServerConnectionCount() {
+      auto instance = get();
+      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         std::cout << "connection count: " << server->getConnections().size() << "\n";
+      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         std::cout << "connection count: " << server->getConnections().size() << "\n";
       }
    }
 public:

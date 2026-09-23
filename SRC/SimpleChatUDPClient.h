@@ -15,7 +15,7 @@ public:
 
    void onRead(std::vector<uint8_t> msg) override {
       std::string text(msg.begin(), msg.end());
-      std::cout << text << "\n";
+      std::cout << "message received from server: " << text << "\n";
    }
 
    void send(const std::vector<uint8_t>& msg) override {

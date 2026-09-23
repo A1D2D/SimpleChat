@@ -16,7 +16,8 @@ enum Command {
    CMD_StartServer,
    CMD_ConnectClient,
    CMD_Stop,
-   CMD_Disconnect
+   CMD_Disconnect,
+   CMD_Connection_Count
 };
 
 std::unordered_map<std::string, Command> commands = {
@@ -45,6 +46,8 @@ std::unordered_map<std::string, Command> commands = {
    {"/m", CMD_Message_Client},
    {"/msg", CMD_Message_Client},
    {"/message", CMD_Message_Client},
+   {"/cc", CMD_Connection_Count},
+   {"/connectioncount", CMD_Connection_Count}
 };
 
 int main() {
@@ -184,8 +187,12 @@ int main() {
          case CMD_Disconnect: {
             auto clientID = StringUtil::parseArg<int>(args, 0);
             if(clientID) {
+               std::cout << "force disconnecting client with id: " << *clientID << "\n";
                controller.disconnect(*clientID);
-            } else controller.disconnect();
+            } else {
+               std::cout << "disconnecting all clients\n";
+               controller.disconnect();
+            }
             break;
          }
          case CMD_Message_Client: {
@@ -201,6 +208,10 @@ int main() {
             }
             std::cout << "msg:\"" << msg << "\"\n";
             controller.send(msg, *clientID);
+            break;
+         }
+         case CMD_Connection_Count: {
+            controller.printServerConnectionCount();
             break;
          }
          case CMD_Message: {
