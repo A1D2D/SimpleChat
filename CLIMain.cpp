@@ -7,6 +7,7 @@
 enum Command {
    CMD_Exit,
    CMD_Message,
+   CMD_Message_Client,
    CMD_Use,
    CMD_Remove,
    CMD_List_Instance,
@@ -41,6 +42,9 @@ std::unordered_map<std::string, Command> commands = {
    {"/cl", CMD_Stop},
    {"/disconnect", CMD_Disconnect},
    {"/d", CMD_Disconnect},
+   {"/m", CMD_Message_Client},
+   {"/msg", CMD_Message_Client},
+   {"/message", CMD_Message_Client},
 };
 
 int main() {
@@ -182,6 +186,25 @@ int main() {
             if(clientID) {
                controller.disconnect(*clientID);
             } else controller.disconnect();
+            break;
+         }
+         case CMD_Message_Client: {
+            auto clientID = StringUtil::parseArg<int>(args, 0);
+            msg = "";
+            for (int i = 1; i < args.size()-1; i++) {
+               if(i == args.size()-1) msg += " ";
+               msg += args[i];
+            }
+            if(!clientID) {
+               std::cerr << "incorrect arg usage\n";
+               continue;
+            }
+            std::cout << "msg:\"" << msg << "\"\n";
+            controller.send(msg, *clientID);
+            break;
+         }
+         case CMD_Message: {
+            controller.send(msg);
             break;
          }
          default:

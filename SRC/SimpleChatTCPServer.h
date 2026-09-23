@@ -41,6 +41,10 @@ public:
       return std::make_shared<SCTConnection>(this, std::move(socket));
    }
 
+   void send(const std::vector<uint8_t>& msg) override {
+      SN::TCPServer::send(msg);
+   }
+
    void disconnect() override {
       SN::TCPServer::disconnect();
    }

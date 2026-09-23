@@ -7,6 +7,7 @@
 #include "SimpleChatTCPServer.h"
 #include "SimpleChatUDPClient.h"
 #include "SimpleChatUDPServer.h"
+#include "Util/StringUtil.h"
 
 #include <functional>
 #include <memory>
@@ -165,10 +166,39 @@ public:
    }
    
    void disconnect(int clientID) {
+      auto instance = get();
+      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         if(clientID > server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         if(clientID > server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+      }
    }
 
    void disconnect() {
+      auto instance = get();
+      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         for (auto connection : server->getConnections()) {
+            connection->disconnect();
+         }
+      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         for (auto connection : server->getConnections()) {
+            connection->disconnect();
+         }
+      }
+   }
 
+   void send(std::string str) {
+      auto instance = get();
+      instance->send(StringUtil::stringToBytes(str));
+   }
+
+   void send(std::string str, int clientID) {
+      auto instance = get();
+      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
+      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
+      }
    }
 public:
    SN::Context context;

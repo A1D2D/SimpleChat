@@ -18,6 +18,10 @@ public:
       std::cout << text << "\n";
    }
 
+   void send(const std::vector<uint8_t>& msg) override {
+      SN::TCPClient::send(msg);
+   }
+
    void disconnect() override {
       SN::TCPClient::disconnect();
    }

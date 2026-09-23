@@ -31,6 +31,10 @@ public:
       startRead();
    }
 
+   void send(const std::vector<uint8_t>& msg) override {
+      SN::UDPServer::send(msg);
+   }
+
    void disconnect() override {
       SN::UDPServer::disconnect();
    }
