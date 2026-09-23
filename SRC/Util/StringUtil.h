@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
@@ -195,6 +196,22 @@ namespace StringUtil {
       if (index >= args.size()) return std::nullopt;
       return args[index];
    }
+
+   template<typename T>
+   inline std::optional<T> parseOptions(const std::string& arg, std::unordered_map<std::string, T> map) {
+      auto it = map.find(arg);
+      if (it == map.end()) {
+         return std::nullopt;
+      } else {
+         return it->second;
+      }
+   }
+
+   template<typename T>
+   inline std::optional<T> parseOptions(const std::vector<std::string>& args, size_t index, std::unordered_map<std::string, T> map) {
+      if (index >= args.size()) return std::nullopt;
+      return parseOptions(args[index], std::move(map));
+   }
 };
 
-#endif //NCORE_STRINGUTIL_H
+#endif // ~NCORE_STRINGUTIL_H

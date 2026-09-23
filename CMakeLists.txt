@@ -77,6 +77,10 @@ add_executable(Client
    ClientMain.cpp
 )
 
+add_executable(CLIMain
+   CLIMain.cpp
+)
+
 add_executable(Server
    ServerMain.cpp
 )
@@ -91,6 +95,12 @@ if(WIN32)
       mswsock
    )
    target_link_libraries(Client PRIVATE NCore)
+
+   target_link_libraries(CLIMain PRIVATE
+      ws2_32
+      mswsock
+   )
+   target_link_libraries(CLIMain PRIVATE NCore)
 
    target_link_libraries(Server PRIVATE 
       ws2_32

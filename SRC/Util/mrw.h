@@ -74,4 +74,4 @@ namespace MRW {
    }
 }
 
-#endif //MRW_MEMORY_READ_WRITE_H
+#endif // ~MRW_MEMORY_READ_WRITE_H

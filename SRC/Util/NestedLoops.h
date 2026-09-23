@@ -33,4 +33,4 @@ namespace SN {
 }
 
 
-#endif //NCORE_NESTEDLOOPS_H
+#endif //  ~NCORE_NESTEDLOOPS_H
