@@ -73,16 +73,8 @@ link_directories(
    ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${LIB_LINK_FOLDER_NAME}
 )
 
-add_executable(Client
-   ClientMain.cpp
-)
-
 add_executable(CLIMain
    CLIMain.cpp
-)
-
-add_executable(Server
-   ServerMain.cpp
 )
 
 add_executable(Tests
@@ -90,23 +82,11 @@ add_executable(Tests
 )
 
 if(WIN32)
-   target_link_libraries(Client PRIVATE
-      ws2_32
-      mswsock
-   )
-   target_link_libraries(Client PRIVATE NCore)
-
    target_link_libraries(CLIMain PRIVATE
       ws2_32
       mswsock
    )
    target_link_libraries(CLIMain PRIVATE NCore)
-
-   target_link_libraries(Server PRIVATE 
-      ws2_32
-      mswsock
-   )
-   target_link_libraries(Server PRIVATE NCore)
    
    target_link_libraries(Tests PRIVATE
       ws2_32
