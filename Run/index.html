@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8" />
+   <title>SimpleChat UI</title>
+   <link rel="stylesheet" href="css/style.css" />
+   <script src="js/app.js" defer></script>
+</head>
+
+<body>
+   <div class="layout">
+      <h1 class="page-title">SimpleChat</h1>
+
+      <div class="container">
+         <div class="sidebar">
+            <div class="topnav">
+               <button id="add" title="Add">+</button>
+               <!-- <button id="test" title="Test">T</button> -->
+               <button id="remove" title="Remove">–</button>
+               <input type="text" id="instanceID" name="instanceID"><br><br>
+            </div>
+            <div id="instance-list"></div>
+         </div>
+         <div class="main">
+            <div id="chat">
+               <div class="chat-output" id="chat-output"></div>
+
+               <div class="chat-input">
+                  <span>&gt;</span>
+                  <input id="chat-msg" type="text">
+               </div>
+            </div>
+         </div>
+      </div>
+
+      <div class="botnav">
+         <button id="resolve-button" title="Resolve">Resolve</button>
+         <button id="start-button" title="StartServer">StartServer</button>
+         <button id="connect-button" title="ConnectToServer">Connect</button>
+         <button id="stop-button" title="StopInstance">Stop</button>
+         <button id="disconnect-button" title="Disconnect">Disconnect</button>
+      </div>
+
+      <div id="console">
+         <div class="console-output" id="console-output"></div>
+
+         <div class="console-input">
+            <span>&gt;</span>
+            <input id="console-command" type="text">
+         </div>
+      </div>
+   </div>
+
+   <div id="instance-menu">
+      <div id="menu-remove">Remove</div>
+      <div id="menu-connect">Connect</div>
+      <div id="menu-start">Start Server</div>
+   </div>
+
+   <div id="connect-modal" class="modal">
+      <div class="modal-content">
+         <div class="modal-title">Connect</div>
+
+         <label for="connect-protocol">Protocol</label>
+         <select id="connect-protocol">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+         </select>
+
+         <label for="connect-ip">IP Address</label>
+         <input id="connect-ip" type="text" placeholder="127.0.0.1">
+
+         <label for="connect-port">Port</label>
+         <input id="connect-port" type="number" placeholder="5555">
+
+         <div class="modal-buttons">
+            <button id="connect-cancel">Cancel</button>
+            <button id="connect-confirm">Connect</button>
+         </div>
+      </div>
+   </div>
+
+   <div id="start-modal" class="modal">
+      <div class="modal-content">
+         <div class="modal-title">Start Server</div>
+
+         <label for="start-protocol">Protocol</label>
+         <select id="start-protocol">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+         </select>
+
+         <label for="start-port">Port</label>
+         <input id="start-port" type="number" placeholder="5555">
+
+         <div class="modal-buttons">
+            <button id="start-cancel">Cancel</button>
+            <button id="start-confirm">Create</button>
+         </div>
+      </div>
+   </div>
+
+   <div id="resolve-modal" class="modal">
+      <div class="modal-content">
+         <div class="modal-title">Resolve</div>
+
+         <label for="resolve-protocol">Protocol</label>
+         <select id="resolve-protocol">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+         </select>
+
+         <label for="resolve-ip">IP Address</label>
+         <input id="resolve-ip" type="text" placeholder="127.0.0.1">
+
+         <label for="resolve-port">Port</label>
+         <input id="resolve-port" type="number" placeholder="5555">
+
+         <div class="modal-buttons">
+            <button id="resolve-cancel">Cancel</button>
+            <button id="resolve-confirm">Resolve</button>
+         </div>
+      </div>
+   </div>
+
+</body>
+</html>

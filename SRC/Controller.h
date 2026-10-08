@@ -1,19 +1,18 @@
-#ifndef INSTANCE_MANNAGER_H
-#define INSTANCE_MANNAGER_H
+#ifndef INSTANCE_CONTROLLER_H
+#define INSTANCE_CONTROLLER_H
 
 #include "Instance.h"
-#include "StreamedNet.h"
 #include "SimpleChatTCPClient.h"
 #include "SimpleChatTCPServer.h"
 #include "SimpleChatUDPClient.h"
 #include "SimpleChatUDPServer.h"
+#include "StreamedNet.h"
 #include "Util/StringUtil.h"
 
 #include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
 
 class SCResolver : public SN::Resolver, public std::enable_shared_from_this<SCResolver> {
 public:
@@ -44,51 +43,46 @@ public:
    std::shared_ptr<SCResolver> self;
 };
 
-template<typename T>
 class InstanceManager {
 public:
-   InstanceManager() {
+   InstanceManager() { 
       use("0");
    }
 
-   T& use(const std::string& id) {
-      auto [it, inserted] = instances.emplace(id, T{});
+   std::shared_ptr<Instance>& use(const std::string& id) {
+      auto [it, inserted] = instances.emplace(id, nullptr);
       current = id;
       return it->second;
    }
 
-   T& get() {
-      return instances.at(current);
-   }
+   std::shared_ptr<Instance>& get() { return instances.at(current); }
 
-   T& get(const std::string& id) {
-      return instances.at(id);
-   }
+   std::shared_ptr<Instance>& get(const std::string& id) { return instances.at(id); }
 
    bool remove(const std::string& id) {
       auto removed = instances.erase(id);
-      if(!removed) return false;
+      if (!removed) return false;
 
-      if(current == id || id == "0") use("0");
+      if (current == id || id == "0") use("0");
       return true;
    }
 
-   std::string getCurrentSelectedId() {
-      return current;
-   }
+   std::string getCurrentSelectedId() { return current; }
 
-   std::unordered_map<std::string, T> getInstances() const { return instances; }
-   
+   std::unordered_map<std::string, std::shared_ptr<Instance>> getInstances() const { return instances; }
+
 private:
-   std::unordered_map<std::string, T> instances;
+   std::unordered_map<std::string, std::shared_ptr<Instance>> instances;
    std::string current = "0";
 };
 
-class SimpleChatController : public InstanceManager<std::shared_ptr<Instance>> {
+class SimpleChatController : public InstanceManager {
 public:
-   SimpleChatController() : guard(context), InstanceManager<std::shared_ptr<Instance>>() {
+   SimpleChatController(std::shared_ptr<MessageCallback> messageCallback) : guard(context), InstanceManager(), messageCallback(messageCallback) {
+      // mutex = std::make_shared<std::mutex>();
       th = std::thread([this]() {
-         while(context.usage()) {
+         while (context.usage()) {
+            // std::lock_guard<std::mutex> guard(*mutex);
             context.poll();
          }
       });
@@ -97,8 +91,8 @@ public:
    void resolve(std::string ip, uint16_t port, bool tcp = true) {
       std::cout << "started resolver with " << (tcp ? "tcp" : "udp") << " protocol\n";
       auto resolver = std::make_shared<SCResolver>(context);
-      if(tcp) {
-         resolver->addResolveFunc([](std::vector<tcp::endpoint> endpoints){
+      if (tcp) {
+         resolver->addResolveFunc([](std::vector<tcp::endpoint> endpoints) {
             std::cout << "tcp Endpoints: \n";
             for (auto endpoint : endpoints) {
                std::cout << endpoint.address().to_string() << " : " << endpoint.port() << "\n";
@@ -106,7 +100,7 @@ public:
          });
          resolver->resolve<SN::NetworkMode::TCP>(ip, port);
       } else {
-         resolver->addResolveFunc([](std::vector<udp::endpoint> endpoints){
+         resolver->addResolveFunc([](std::vector<udp::endpoint> endpoints) {
             std::cout << "upd Endpoints: \n";
             for (auto endpoint : endpoints) {
                std::cout << endpoint.address().to_string() << " : " << endpoint.port() << "\n";
@@ -118,45 +112,39 @@ public:
 
    void start(uint16_t port, bool tcp = true) {
       auto& instance = get();
-      if(tcp) {
-         if(!instance) instance = std::make_shared<SCTServer>(context);
+      if (tcp) {
+         if (!instance) instance = std::make_shared<SCTServer>(context, messageCallback);
          auto instPtr = std::dynamic_pointer_cast<SCTServer>(instance);
-         if(!instPtr) return;
-         instPtr->start({
-            tcp::endpoint(tcp::v4(), port),
-            tcp::endpoint(tcp::v6(), port)
-         });
+         if (!instPtr) return;
+         instPtr->start({tcp::endpoint(tcp::v4(), port), tcp::endpoint(tcp::v6(), port)});
       } else {
-         if(!instance) instance = std::make_shared<SCUServer>(context);
+         if (!instance) instance = std::make_shared<SCUServer>(context, messageCallback);
          auto instPtr = std::dynamic_pointer_cast<SCUServer>(instance);
-         if(!instPtr) return;
-         instPtr->start({
-            udp::endpoint(udp::v4(), port),
-            udp::endpoint(udp::v6(), port)
-         });
+         if (!instPtr) return;
+         instPtr->start({udp::endpoint(udp::v4(), port), udp::endpoint(udp::v6(), port)});
       }
    }
 
    void connect(std::string ip, uint16_t port, bool tcp = true) {
       std::cout << "started connection resolve with " << (tcp ? "tcp" : "udp") << " protocol\n";
       auto resolver = std::make_shared<SCResolver>(context);
-      if(tcp) {
+      if (tcp) {
          auto& instance = get();
-         if(!instance) instance = std::make_shared<SCTClient>(context);
+         if (!instance) instance = std::make_shared<SCTClient>(context, messageCallback);
 
          resolver->addResolveFunc([this, instance](std::vector<tcp::endpoint> endpoints) {
             auto instPtr = std::dynamic_pointer_cast<SCTClient>(instance);
-            if(!instPtr) return;
+            if (!instPtr) return;
             instPtr->connect(endpoints);
          });
          resolver->resolve<SN::NetworkMode::TCP>(ip, port);
       } else {
          auto& instance = get();
-         if(!instance) instance = std::make_shared<SCUClient>(context);
+         if (!instance) instance = std::make_shared<SCUClient>(context, messageCallback);
 
          resolver->addResolveFunc([this, instance](std::vector<udp::endpoint> endpoints) {
             auto instPtr = std::dynamic_pointer_cast<SCUClient>(instance);
-            if(!instPtr) return;
+            if (!instPtr) return;
             instPtr->connect(endpoints);
          });
          resolver->resolve<SN::NetworkMode::UDP>(ip, port);
@@ -165,26 +153,26 @@ public:
 
    void stop() {
       auto instance = get();
-      if(!instance) return;
+      if (!instance) return;
       instance->disconnect();
    }
-   
+
    void disconnect(int clientID) {
       auto instance = get();
-      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
-         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
-      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
-         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+      if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         if (clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
+      } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         if (clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
       }
    }
 
    void disconnect() {
       auto instance = get();
-      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+      if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          for (auto connection : server->getConnections()) {
             connection->disconnect();
          }
-      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+      } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
          for (auto connection : server->getConnections()) {
             connection->disconnect();
          }
@@ -198,25 +186,33 @@ public:
 
    void send(std::string str, int clientID) {
       auto instance = get();
-      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
-         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
-      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
-         if(clientID < server->getConnections().size()) server->getConnections()[clientID]->send(StringUtil::stringToBytes(str));
+      if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+         if (clientID < server->getConnections().size()) server->getConnections<SCTConnection>()[clientID]->sendAsConnection(StringUtil::stringToBytes(str));
+      } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+         if (clientID < server->getConnections().size()) server->getConnections<SCUConnection>()[clientID]->sendAsConnection(StringUtil::stringToBytes(str));
       }
    }
 
    void printServerConnectionCount() {
       auto instance = get();
-      if(auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
+      if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          std::cout << "connection count: " << server->getConnections().size() << "\n";
-      } else if(auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
+      } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
          std::cout << "connection count: " << server->getConnections().size() << "\n";
       }
    }
+
+   std::vector<ChatMessage> getMessages() {
+      auto instance = get();
+      if(!instance) return {};
+      return instance->messages;
+   }
+
 public:
    SN::Context context;
    SN::Context::UsageGuard guard;
    std::thread th;
+   std::shared_ptr<MessageCallback> messageCallback;
 };
 
-#endif // ~INSTANCE_MANNAGER_H
+#endif // INSTANCE_CONTROLLER_H

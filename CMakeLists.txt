@@ -20,6 +20,7 @@ set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${FETCHED_CONTE
 set(BUILD_STATIC_EXECUTEABLE OFF)
 
 set(CMAKE_STRICT_STANDARD ON)
+option(SIMPLECHAT_BUILD_UI "Build the SimpleChat UI application" ON)
 
 #preConfig
 if(CMAKE_STRICT_STANDARD)
@@ -42,13 +43,33 @@ if(CMAKE_STRICT_STANDARD)
 endif()
 
 #fetchExternals
+# === WebView ===
+if(SIMPLECHAT_BUILD_UI)
+   FetchContent_Declare(
+      webview
+      GIT_REPOSITORY https://github.com/webview/webview
+      GIT_TAG 0.12.0
+   )
 
+   set(WEBVIEW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+   set(WEBVIEW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+   set(WEBVIEW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+   set(WEBVIEW_BUILD_AMALGAMATION OFF CACHE BOOL "" FORCE)
+
+   FetchContent_Declare(
+      webview2
+      URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+   )
+
+   FetchContent_MakeAvailable(webview webview2)
+endif()
 
 #vcpkg:
 # find_package(lib CONFIG REQUIRED)
 
 #subdirectory
-add_subdirectory(Libraries/External/NCore)
+add_subdirectory(${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/External/NCore)
 
 # Test
 enable_testing()
@@ -65,7 +86,6 @@ if(BUILD_STATIC_EXECUTEABLE MATCHES ON)
 endif()
 
 include_directories(
-   ${EXTERNAL_INCLUDE_PATHS}
    ${CMAKE_SOURCE_DIR}/${LIB_FOLDER_NAME}/${INCLUDE_FOLDER_NAME}
 )
 
@@ -81,17 +101,22 @@ add_executable(Tests
    Test/main.cpp
 )
 
+add_executable(UIMain
+   UIMain.cpp
+)
+
 if(WIN32)
-   target_link_libraries(CLIMain PRIVATE
-      ws2_32
-      mswsock
-   )
    target_link_libraries(CLIMain PRIVATE NCore)
-   
-   target_link_libraries(Tests PRIVATE
-      ws2_32
-      mswsock
+
+   target_include_directories(UIMain PRIVATE
+      ${webview2_SOURCE_DIR}/build/native/include
    )
+
+   target_link_libraries(UIMain PRIVATE
+      webview::core
+      NCore
+   )
+
    target_link_libraries(Tests PRIVATE NCore)
    # target_compile_definitions(Tests PRIVATE NetStream_Enable_Log)
 endif()
