@@ -4,7 +4,6 @@
 #include <StreamedNet.h>
 #include <memory>
 #include "Instance.h"
-#include "Util/StringUtil.h"
 
 class SCTClient : public SN::TCPClient, public Instance {
 public:
@@ -26,6 +25,7 @@ public:
       SN::TCPClient::send(msg);
       std::string text(msg.begin(), msg.end());
       messages.push_back(ChatMessage(text + "\n", MessageType::Client));
+      if(messageCallback) (*messageCallback)("sending:" + text + "\n", MessageType::Info);
    }
 
    void disconnect() override {

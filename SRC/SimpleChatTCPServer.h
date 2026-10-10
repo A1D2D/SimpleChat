@@ -62,6 +62,7 @@ public:
       SN::TCPServer::send(msg);
       std::string text(msg.begin(), msg.end());
       messages.push_back(ChatMessage(text + "\n", MessageType::Server));
+      if(messageCallback) (*messageCallback)("sending:" + text + "\n", MessageType::Info);
    }
 
    void disconnect() override {
@@ -84,6 +85,7 @@ inline void SCTConnection::sendAsConnection(const std::vector<uint8_t>& msg) {
    SN::TCPConnection::send(msg);
    std::string text(msg.begin(), msg.end());
    getServer<SCTServer>()->messages.push_back(ChatMessage(text + "\n", MessageType::Connection, id));
+   if(callback) (*callback)("sending:" + text + "\n", MessageType::Info);
 };
 
 #endif // ~SIMPLECHAT_TCP_SERVER_H

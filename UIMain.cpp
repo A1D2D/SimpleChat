@@ -141,13 +141,13 @@ int AppMain {
             } else if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
                type = "TCP Server";
                for (auto& connection : server->getConnections()) {
-                  tcp::endpoint endpoint = connection->getSocket()->remote_endpoint();
+                  tcp::endpoint endpoint = connection->getEndpoint();
                   connectedClients.push_back("[" + endpoint.address().to_string() + "]:" + std::to_string(endpoint.port()));
                }
             } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
                type = "UDP Server";
                for (auto& connection : server->getConnections()) {
-                  udp::endpoint endpoint = connection->getSocket()->remote_endpoint();
+                  udp::endpoint endpoint = connection->getEndpoint();
                   connectedClients.push_back("[" + endpoint.address().to_string() + "]:" + std::to_string(endpoint.port()));
                }
             }

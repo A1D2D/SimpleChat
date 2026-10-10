@@ -66,6 +66,7 @@ public:
       SN::UDPServer::send(msg);
       std::string text(msg.begin(), msg.end());
       messages.push_back(ChatMessage(text + "\n", MessageType::Server));
+      if(messageCallback) (*messageCallback)("sending:" + text + "\n", MessageType::Info);
    }
 
    void disconnect() override {
@@ -88,6 +89,7 @@ inline void SCUConnection::sendAsConnection(const std::vector<uint8_t>& msg) {
    SN::UDPConnection::send(msg);
    std::string text(msg.begin(), msg.end());
    getServer<SCUServer>()->messages.push_back(ChatMessage(text + "\n", MessageType::Connection, id));
+   if(callback) (*callback)("sending:" + text + "\n", MessageType::Info);
 }
 
 #endif // ~SIMPLECHAT_UDP_SERVER_H
