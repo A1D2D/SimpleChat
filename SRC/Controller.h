@@ -159,6 +159,7 @@ public:
 
    void disconnect(int clientID) {
       auto instance = get();
+      if(!instance) return;
       if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          if (clientID < server->getConnections().size()) server->getConnections()[clientID]->disconnect();
       } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
@@ -168,6 +169,7 @@ public:
 
    void disconnect() {
       auto instance = get();
+      if(!instance) return;
       if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          for (auto connection : server->getConnections()) {
             connection->disconnect();
@@ -181,20 +183,28 @@ public:
 
    void send(std::string str) {
       auto instance = get();
+      if(!instance || typeid(instance.get()) == typeid(Instance)) {
+         if(messageCallback) (*messageCallback)("failed to send message instance is unset type\n", MessageType::Warning);
+         return;
+      }
       instance->send(StringUtil::stringToBytes(str));
    }
 
    void send(std::string str, int clientID) {
       auto instance = get();
+      if(!instance) return;
       if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          if (clientID < server->getConnections().size()) server->getConnections<SCTConnection>()[clientID]->sendAsConnection(StringUtil::stringToBytes(str));
       } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
          if (clientID < server->getConnections().size()) server->getConnections<SCUConnection>()[clientID]->sendAsConnection(StringUtil::stringToBytes(str));
+      } else {
+         if(messageCallback) (*messageCallback)("failed to send message instance is unset type\n", MessageType::Warning);
       }
    }
 
    void printServerConnectionCount() {
       auto instance = get();
+      if(!instance) return;
       if (auto server = std::dynamic_pointer_cast<SCTServer>(instance)) {
          std::cout << "connection count: " << server->getConnections().size() << "\n";
       } else if (auto server = std::dynamic_pointer_cast<SCUServer>(instance)) {
